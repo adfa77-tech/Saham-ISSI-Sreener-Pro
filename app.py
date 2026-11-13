@@ -48,19 +48,20 @@ def round_idx_tick(price):
         tick = 25
     return int(round(price / tick) * tick)
 
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=600)
 def get_ihsg_data():
     try:
-        hist = yf.Ticker("^JKSE").history(period="5d")
-        if len(hist) >= 2:
+        ihsg = yf.Ticker("^JKSE")
+        hist = ihsg.history(period="5d")
+        if not hist.empty and len(hist) >= 2:
             last_close = hist['Close'].iloc[-1]
             prev_close = hist['Close'].iloc[-2]
             change = last_close - prev_close
             pct_change = (change / prev_close) * 100
-            return last_close, change, pct_change
+            return float(last_close), float(change), float(pct_change)
     except Exception:
         pass
-    return 0, 0, 0
+    return 0.0, 0.0, 0.0
 
 def calculate_indicators(df):
     df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
@@ -166,8 +167,9 @@ def scan_issi_stocks(tickers, strategy_mode, modal_trading, risk_pct, sl_mult, t
     for i, ticker in enumerate(tickers):
         try:
             stock = yf.Ticker(ticker)
-            df = stock.history(period="1y")
-            if len(df) < 50:
+            df = stock.history(period="6mo") # Dioptimalkan ke 6 bulan agar lebih cepat & stabil
+            if len(df) < 30:
+                progress_bar.progress((i + 1) / total)
                 continue
 
             df = calculate_indicators(df)
@@ -176,8 +178,9 @@ def scan_issi_stocks(tickers, strategy_mode, modal_trading, risk_pct, sl_mult, t
             pct_change = ((latest['Close'] - prev['Close']) / prev['Close']) * 100
 
             entry_price = round_idx_tick(latest['Close'])
-            sl_price = max(50, round_idx_tick(entry_price - (sl_mult * latest.get('ATR', entry_price * 0.05))))
-            tp_price = round_idx_tick(entry_price + (tp_mult * latest.get('ATR', entry_price * 0.05)))
+            atr_val = latest.get('ATR', entry_price * 0.05)
+            sl_price = max(50, round_idx_tick(entry_price - (sl_mult * atr_val)))
+            tp_price = round_idx_tick(entry_price + (tp_mult * atr_val))
 
             risk_per_share = max(1, entry_price - sl_price)
             rr_ratio = round(max(0, tp_price - entry_price) / risk_per_share, 2)
@@ -185,12 +188,15 @@ def scan_issi_stocks(tickers, strategy_mode, modal_trading, risk_pct, sl_mult, t
             if (suggested_lots * 100 * entry_price) > modal_trading:
                 suggested_lots = max(0, int(modal_trading // (100 * entry_price)))
 
-            info = stock.info
-            per = info.get('trailingPE', np.nan)
-            pbv = info.get('priceToBook', np.nan)
-            roe = info.get('returnOnEquity', np.nan)
-            if pd.notna(roe):
-                roe = roe * 100
+            try:
+                info = stock.info
+                per = info.get('trailingPE', np.nan)
+                pbv = info.get('priceToBook', np.nan)
+                roe = info.get('returnOnEquity', np.nan)
+                if pd.notna(roe):
+                    roe = roe * 100
+            except Exception:
+                per, pbv, roe = np.nan, np.nan, np.nan
 
             row_data = {
                 'Kode': ticker.replace(".JK", ""),
@@ -200,12 +206,12 @@ def scan_issi_stocks(tickers, strategy_mode, modal_trading, risk_pct, sl_mult, t
                 'Target Profit': tp_price,
                 'Risk/Reward': rr_ratio,
                 'Saran Lot': suggested_lots,
-                'RVOL (x)': round(latest['RVOL'], 2),
-                'RSI (14)': round(latest['RSI'], 1),
-                'EMA20': round(latest['EMA20'], 0),
-                'SMA50': round(latest['SMA50'], 0),
-                'MACD': round(latest['MACD'], 2),
-                'Signal': round(latest['Signal'], 2),
+                'RVOL (x)': round(latest.get('RVOL', 1.0), 2),
+                'RSI (14)': round(latest.get('RSI', 50.0), 1),
+                'EMA20': round(latest.get('EMA20', entry_price), 0),
+                'SMA50': round(latest.get('SMA50', entry_price), 0),
+                'MACD': round(latest.get('MACD', 0.0), 2),
+                'Signal': round(latest.get('Signal', 0.0), 2),
                 'PER (x)': round(per, 2) if pd.notna(per) else None,
                 'PBV (x)': round(pbv, 2) if pd.notna(pbv) else None,
                 'ROE (%)': round(roe, 2) if pd.notna(roe) else None,
@@ -217,8 +223,9 @@ def scan_issi_stocks(tickers, strategy_mode, modal_trading, risk_pct, sl_mult, t
             row_data['Skor'] = score
             row_data['Alasan Sinyal'] = reason
 
+            # Logika Pemilihan Strategi
             if strategy_mode == "Semua Saham ISSI":
-                results.append(row_data)
+                results.append(row_data) # Menampilkan seluruh saham tanpa syarat filter strategi
             elif strategy_mode == "Swing Trading (Uptrend + Momentum)":
                 if latest['Close'] > latest['EMA20'] and 40 <= latest['RSI'] <= 68 and latest['MACD'] > latest['Signal']:
                     results.append(row_data)
@@ -238,13 +245,17 @@ def scan_issi_stocks(tickers, strategy_mode, modal_trading, risk_pct, sl_mult, t
     progress_bar.empty()
     return pd.DataFrame(results)
 
+# Header Utama & Ticker IHSG
 ihsg_price, ihsg_chg, ihsg_pct = get_ihsg_data()
 col_title, col_ihsg = st.columns([3, 1])
 with col_title:
     st.title("🕌 ISSI Pro Stock Screener")
     st.caption("Penyaring Saham Syariah BEI + Kalkulator Manajemen Risiko ATR + Alert Telegram")
 with col_ihsg:
-    st.metric("📊 IHSG", f"{ihsg_price:,.2f}", f"{ihsg_chg:+.2f} ({ihsg_pct:+.2f}%)")
+    if ihsg_price > 0:
+        st.metric("📊 IHSG", f"{ihsg_price:,.2f}", f"{ihsg_chg:+.2f} ({ihsg_pct:+.2f}%)")
+    else:
+        st.metric("📊 IHSG", "Memuat...", "0.00%")
 
 st.divider()
 
@@ -264,11 +275,11 @@ with st.sidebar:
         tg_token = st.text_input("Bot Token", type="password")
         tg_chat_id = st.text_input("Chat ID")
     
-    min_price = st.number_input("Harga Minimal (Rp)", min_value=50, value=50, step=50)
-    max_rsi = st.slider("Maksimal RSI (14)", 20, 100, 80)
+    min_price = st.number_input("Harga Minimal (Rp)", min_value=0, value=0, step=50)
+    max_rsi = st.slider("Maksimal RSI (14)", 20, 100, 100)
     only_buy = st.checkbox("Hanya Sinyal BUY / STRONG BUY", value=False)
     
-    if st.button("🔄 Refresh Data", use_container_width=True):
+    if st.button("🔄 Refresh Data Pasar", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
@@ -276,7 +287,7 @@ if 'issi_list' not in st.session_state:
     st.session_state['issi_list'] = DEFAULT_ISSI
 
 if menu == "🔍 Screener & Trading Plan":
-    df_screen = scan_issi_stocks(st.session_state['issi_list'], strategy, modal_trading, risk_pct, sl_mult, tp_mult)
+    df_screen = scan_issi_stocks(tuple(st.session_state['issi_list']), strategy, modal_trading, risk_pct, sl_mult, tp_mult)
     if not df_screen.empty:
         df_filtered = df_screen[(df_screen['Harga'] >= min_price) & (df_screen['RSI (14)'] <= max_rsi)]
         if only_buy:
@@ -284,8 +295,8 @@ if menu == "🔍 Screener & Trading Plan":
         df_filtered = df_filtered.sort_values(by="Skor", ascending=False)
         
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Lolos Filter", f"{len(df_filtered)} Emiten")
-        m2.metric("Strong Buy", f"{len(df_filtered[df_filtered['Rekomendasi'] == '🟢 STRONG BUY'])} Emiten")
+        m1.metric("Total Emiten", f"{len(df_filtered)}")
+        m2.metric("Strong Buy", f"{len(df_filtered[df_filtered['Rekomendasi'] == '🟢 STRONG BUY'])}")
         m3.metric("Batas Rugi", f"Rp {int(modal_trading * (risk_pct/100)):,}")
         m4.metric("Rata-rata R/R", f"1 : {df_filtered['Risk/Reward'].mean():.2f}" if len(df_filtered) > 0 else "-")
         
@@ -300,7 +311,7 @@ if menu == "🔍 Screener & Trading Plan":
         display_cols = ['Kode', 'Rekomendasi', 'Harga', 'Perubahan (%)', 'Stop Loss', 'Target Profit', 'Risk/Reward', 'Saran Lot', 'RVOL (x)', 'RSI (14)', 'PER (x)', 'PBV (x)', 'Alasan Sinyal']
         st.dataframe(df_filtered[display_cols], use_container_width=True, hide_index=True)
     else:
-        st.warning("Tidak ada saham yang memenuhi kriteria hari ini.")
+        st.warning("Tidak ada saham yang memenuhi kriteria atau data sedang dimuat. Coba klik tombol 'Refresh Data Pasar' di sidebar.")
 
 elif menu == "📈 Analisis Chart & SL/TP":
     selected_stock = st.selectbox("Pilih Saham ISSI:", [t.replace(".JK", "") for t in st.session_state['issi_list']])
@@ -308,8 +319,8 @@ elif menu == "📈 Analisis Chart & SL/TP":
     if not df_chart.empty:
         last_row = df_chart.iloc[-1]
         entry_p = round_idx_tick(last_row['Close'])
-        sl_p = max(50, round_idx_tick(entry_p - (sl_mult * last_row['ATR'])))
-        tp_p = round_idx_tick(entry_p + (tp_mult * last_row['ATR']))
+        sl_p = max(50, round_idx_tick(entry_p - (sl_mult * last_row.get('ATR', entry_p*0.05))))
+        tp_p = round_idx_tick(entry_p + (tp_mult * last_row.get('ATR', entry_p*0.05)))
         
         c1, c2, c3 = st.columns(3)
         c1.metric("Entry", f"Rp {entry_p:,}")
@@ -327,6 +338,7 @@ elif menu == "📈 Analisis Chart & SL/TP":
 
 elif menu == "📚 Kamus Rumus":
     st.markdown("""
+    * **Semua Saham ISSI:** Menampilkan seluruh daftar emiten syariah terdaftar tanpa syarat filter strategi.
     * **Trend:** Harga > EMA 20 > SMA 50
     * **Momentum:** RSI (14) area rebound (30–45) atau bullish (45–65) + MACD Golden Cross
     * **Akumulasi:** Relative Volume (RVOL) $\ge 1.5\text{x}$ rata-rata 20 hari
