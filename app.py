@@ -26,9 +26,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------------------------------------------------
-# DATABASE SAHAM ISSI LENGKAP (574+ EMITEN)
-# ---------------------------------------------------------
 EXCEL_ISSI_TICKERS = [
     "AADI.JK", "AALI.JK", "ABMM.JK", "ACES.JK", "ADCP.JK", "ADES.JK", "ADMG.JK", "ADMR.JK", "ADRO.JK", "AGAR.JK",
     "AGII.JK", "AIMS.JK", "AKKU.JK", "AKPI.JK", "AKRA.JK", "AKSI.JK", "ALAN.JK", "ALDO.JK", "AMAN.JK", "AMAR.JK",
@@ -109,7 +106,6 @@ def round_idx_tick(price):
     return int(round(price / tick) * tick)
 
 def flatten_df(df):
-    """Menangani format MultiIndex dari yfinance versi baru agar chart dan rumus tidak error."""
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     return df.loc[:, ~df.columns.duplicated()]
@@ -158,3 +154,13 @@ def calculate_indicators(df):
     return df
 
 def generate_recommendation(row):
+    score = 0
+    reasons = []
+
+    if row['Close'] > row['EMA20'] and row['EMA20'] > row['SMA50']:
+        score += 2
+        reasons.append("Strong Uptrend")
+    elif row['Close'] > row['EMA20']:
+        score += 1
+        reasons.append("Bullish (>EMA20)")
+
