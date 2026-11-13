@@ -7,10 +7,10 @@ import requests
 from datetime import datetime
 
 st.set_page_config(
-    page_title="ISSI Pro Screener",
+    page_title="ISSI Pro Screener & Analytics",
     page_icon="📈",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 st.markdown("""
@@ -21,16 +21,77 @@ st.markdown("""
         border: 1px solid #30363D;
         padding: 15px;
         border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
 </style>
 """, unsafe_allow_html=True)
 
-DEFAULT_ISSI = [
-    "TLKM.JK", "ASII.JK", "UNTR.JK", "ADRO.JK", "PTBA.JK", "ITMG.JK",
-    "ICBP.JK", "INDF.JK", "KLBF.JK", "MIKA.JK", "HEAL.JK", "MDKA.JK",
-    "ANTM.JK", "INCO.JK", "TINS.JK", "PGAS.JK", "AKRA.JK", "BRIS.JK",
-    "BTPS.JK", "CPIN.JK", "JPFA.JK", "EXCL.JK", "ISAT.JK", "MAPI.JK",
-    "ACES.JK", "ERAA.JK", "BSDE.JK", "CTRA.JK", "PWON.JK", "SMRA.JK"
+# ---------------------------------------------------------
+# DATABASE SAHAM ISSI LANGSUNG DARI EXCEL ANDA (574+ EMITEN)
+# ---------------------------------------------------------
+EXCEL_ISSI_TICKERS = [
+    "AADI.JK", "AALI.JK", "ABMM.JK", "ACES.JK", "ADCP.JK", "ADES.JK", "ADMG.JK", "ADMR.JK", "ADRO.JK", "AGAR.JK",
+    "AGII.JK", "AIMS.JK", "AKKU.JK", "AKPI.JK", "AKRA.JK", "AKSI.JK", "ALAN.JK", "ALDO.JK", "AMAN.JK", "AMAR.JK",
+    "AMFG.JK", "AMIN.JK", "AMMN.JK", "AMOR.JK", "ANJT.JK", "ANTM.JK", "APEX.JK", "APIC.JK", "APLI.JK", "ARCI.JK",
+    "ARKA.JK", "ARKO.JK", "ARNA.JK", "ARTA.JK", "ARTI.JK", "ASBI.JK", "ASDM.JK", "ASII.JK", "ASJT.JK", "ASRI.JK",
+    "ATAP.JK", "ATIC.JK", "AUTO.JK", "AVIA.JK", "AXIO.JK", "BABP.JK", "BAJA.JK", "BALI.JK", "BANK.JK", "BAPI.JK",
+    "BATA.JK", "BAUT.JK", "BAYU.JK", "BBCA.JK", "BBHI.JK", "BBKP.JK", "BBMD.JK", "BBNI.JK", "BBRI.JK", "BBSI.JK",
+    "BBTN.JK", "BBYB.JK", "BCIC.JK", "BDMN.JK", "BEBS.JK", "BEEF.JK", "BEER.JK", "BELI.JK", "BESS.JK", "BEST.JK",
+    "BFIN.JK", "BGTG.JK", "BHIT.JK", "BIKA.JK", "BINA.JK", "BINO.JK", "BIPI.JK", "BIRD.JK", "BISI.JK", "BITO.JK",
+    "BJBR.JK", "BJTM.JK", "BKDP.JK", "BKSL.JK", "BLTA.JK", "BLTZ.JK", "BLUE.JK", "BMAS.JK", "BMHS.JK", "BMRI.JK",
+    "BMSR.JK", "BMTR.JK", "BNBA.JK", "BNGA.JK", "BNII.JK", "BNLI.JK", "BOBA.JK", "BOGA.JK", "BOLA.JK", "BOLT.JK",
+    "BPTR.JK", "BRAM.JK", "BREN.JK", "BRIS.JK", "BRMS.JK", "BRNA.JK", "BSBK.JK", "BSDE.JK", "BSML.JK", "BSSR.JK",
+    "BSWD.JK", "BTPS.JK", "BUAH.JK", "BUDI.JK", "BUKK.JK", "BULL.JK", "BUMI.JK", "BUVA.JK", "BVIC.JK", "BWPT.JK",
+    "BYAN.JK", "CAKK.JK", "CAMP.JK", "CARS.JK", "CASA.JK", "CASH.JK", "CASS.JK", "CBRE.JK", "CBUT.JK", "CCSI.JK",
+    "CEKA.JK", "CENT.JK", "CFIN.JK", "CGAS.JK", "CHEK.JK", "CINT.JK", "CITA.JK", "CITY.JK", "CLPI.JK", "CMNP.JK",
+    "CMPP.JK", "CMRY.JK", "CNKO.JK", "CNTX.JK", "COCO.JK", "CPIN.JK", "CRAB.JK", "CSIS.JK", "CSMI.JK", "CSRA.JK",
+    "CTBN.JK", "CTRA.JK", "CUAN.JK", "DADA.JK", "DATA.JK", "DANA.JK", "DEAL.JK", "DEWI.JK", "DFAM.JK", "DGIK.JK",
+    "DGNS.JK", "DIDX.JK", "DIRA.JK", "DMMX.JK", "DNAR.JK", "DOID.JK", "DPum.JK", "DPNS.JK", "DRMA.JK", "DSFI.JK",
+    "DSNG.JK", "DSSA.JK", "DUCK.JK", "DWGL.JK", "EAST.JK", "ECII.JK", "EDGE.JK", "EDIN.JK", "EKAD.JK", "ELIT.JK",
+    "ELSA.JK", "ELPI.JK", "EMDE.JK", "ENAK.JK", "ENRG.JK", "ENZO.JK", "EPAC.JK", "EPMT.JK", "ERAA.JK", "ERTX.JK",
+    "ESIP.JK", "ESSA.JK", "ESTA.JK", "ESTI.JK", "ETWA.JK", "EXCL.JK", "FAPA.JK", "FASW.JK", "FILM.JK", "FIMP.JK",
+    "FIRE.JK", "FISH.JK", "FPNI.JK", "FREN.JK", "FUTR.JK", "FWCT.JK", "GAMA.JK", "GATE.JK", "GBKA.JK", "GEMA.JK",
+    "GEMS.JK", "GGRM.JK", "GGRP.JK", "GHON.JK", "GIAA.JK", "GJTL.JK", "GLVA.JK", "GMFI.JK", "GMTD.JK", "GOLD.JK",
+    "GOLF.JK", "GOOD.JK", "GPRA.JK", "GPSO.JK", "GRPH.JK", "GGRP.JK", "GTBO.JK", "GTSI.JK", "GULA.JK", "GZCO.JK",
+    "HADE.JK", "HAIS.JK", "HALO.JK", "HATM.JK", "HDIT.JK", "HEAL.JK", "HELI.JK", "HERO.JK", "HEXA.JK", "HITS.JK",
+    "HKMU.JK", "HMSP.JK", "HOKI.JK", "HOME.JK", "HOMI.JK", "HOPE.JK", "HRME.JK", "HRTA.JK", "IATA.JK", "IBFN.JK",
+    "IBOS.JK", "ICBP.JK", "ICON.JK", "IDEA.JK", "IDPR.JK", "IFII.JK", "IFSH.JK", "IGAR.JK", "IIKF.JK", "IMAS.JK",
+    "IMJS.JK", "IMPC.JK", "INCO.JK", "INDF.JK", "INDS.JK", "INink.JK", "INKP.JK", "INPC.JK", "INPP.JK", "INPS.JK",
+    "INRU.JK", "INTA.JK", "INTD.JK", "INTP.JK", "IOSP.JK", "IPCC.JK", "IPCM.JK", "IPEH.JK", "IPOL.JK", "IPPE.JK",
+    "ISAT.JK", "ISSP.JK", "ITMA.JK", "ITMG.JK", "Jatis.JK", "JATI.JK", "JAWA.JK", "JAYA.JK", "JECC.JK", "JGLE.JK",
+    "JKON.JK", "JMAS.JK", "JPFA.JK", "JSMR.JK", "JSPT.JK", "JTPE.JK", "KAEF.JK", "KARW.JK", "KAYU.JK", "KEEN.JK",
+    "KEIS.JK", "KELN.JK", "KDTN.JK", "KEJU.JK", "KICI.JK", "KIJA.JK", "KINO.JK", "KJEN.JK", "KKGI.JK", "KLBF.JK",
+    "KMDS.JK", "KOBX.JK", "KOIN.JK", "KOKA.JK", "KONI.JK", "KOPI.JK", "KOTA.JK", "KPIG.JK", "KRAK.JK", "LABS.JK",
+    "LAJU.JK", "LAND.JK", "LAPD.JK", "LCKM.JK", "LEAD.JK", "LFLO.JK", "LIFE.JK", "LINK.JK", "LION.JK", "LMas.JK",
+    "LMPI.JK", "LMSH.JK", "LPCK.JK", "LPGI.JK", "LPIN.JK", "LPPF.JK", "LPPS.JK", "LPTA.JK", "LRNA.JK", "LSIP.JK",
+    "LUCK.JK", "LUCY.JK", "MABA.JK", "MAGP.JK", "MAIN.JK", "MAMI.JK", "MAPA.JK", "MAPI.JK", "MARI.JK", "MARK.JK",
+    "MASB.JK", "MAYA.JK", "MBAP.JK", "MBMA.JK", "MBSS.JK", "MBTO.JK", "MCAS.JK", "MDKA.JK", "MEDC.JK", "MEGA.JK",
+    "MENN.JK", "MERK.JK", "META.JK", "MFMI.JK", "MGLV.JK", "MICE.JK", "MIDI.JK", "MIKA.JK", "MINA.JK", "MIRA.JK",
+    "MITI.JK", "MKNT.JK", "MKPI.JK", "MLIA.JK", "MLPL.JK", "MLPT.JK", "MMIX.JK", "MMLP.JK", "MNCN.JK", "MOLI.JK",
+    "MPPA.JK", "MPXL.JK", "MRAT.JK", "MREI.JK", "MSIN.JK", "MSKY.JK", "MTDL.JK", "MTEL.JK", "MTMH.JK", "MTSM.JK",
+    "MUTU.JK", "MYOH.JK", "MYor.JK", "MYRX.JK", "NANO.JK", "NICK.JK", "NELY.JK", "NEMI.JK", "NEST.JK", "NETV.JK",
+    "NFCX.JK", "NICK.JK", "Niki.JK", "NINE.JK", "NLIQ.JK", "NOBU.JK", "NPGF.JK", "NSSS.JK", "NUSA.JK", "NZIA.JK",
+    "OASA.JK", "OBMD.JK", "OCAP.JK", "OKAS.JK", "OLIV.JK", "OMRE.JK", "PADA.JK", "PADI.JK", "PALM.JK", "PAMG.JK",
+    "PANI.JK", "PARA.JK", "PATK.JK", "PBLE.JK", "PBID.JK", "PBRX.JK", "PDES.JK", "PEHA.JK", "PEVE.JK", "PGAS.JK",
+    "PGEO.JK", "PGLI.JK", "PGUN.JK", "PICO.JK", "PJAA.JK", "PKPK.JK", "PLAS.JK", "PLIN.JK", "PMJS.JK", "PNBN.JK",
+    "PNBS.JK", "PNGO.JK", "PNIN.JK", "PNSE.JK", "POLA.JK", "POLI.JK", "POLL.JK", "POLY.JK", "POOL.JK", "PORT.JK",
+    "POSA.JK", "POWR.JK", "PPRO.JK", "PRAS.JK", "PSAB.JK", "PSDN.JK", "PSGO.JK", "PSSI.JK", "PTBA.JK", "PTDU.JK",
+    "PUDP.JK", "PURA.JK", "PURE.JK", "PWON.JK", "PYFA.JK", "PZZA.JK", "RAAM.JK", "RAJA.JK", "RANC.JK", "RBMS.JK",
+    "RDTX.JK", "REAL.JK", "RELF.JK", "RICY.JK", "RIGS.JK", "RISE.JK", "RMKE.JK", "ROCK.JK", "ROTI.JK", "RUIS.JK",
+    "RUNS.JK", "SAFE.JK", "SAGE.JK", "SAID.JK", "SAME.JK", "SAMF.JK", "SAPX.JK", "SATU.JK", "SBAT.JK", "SBMA.JK",
+    "SCCO.JK", "SCMA.JK", "SCNP.JK", "SCPI.JK", "SDPC.JK", "SDRA.JK", "SEMA.JK", "SGER.JK", "SGRO.JK", "SHIP.JK",
+    "SICO.JK", "SIDO.JK", "SILO.JK", "SIMA.JK", "SIMP.JK", "SKLT.JK", "SKRN.JK", "SKYB.JK", "SMIK.JK", "SMIL.JK",
+    "SMKM.JK", "SMMA.JK", "SMMT.JK", "SMổn.JK", "SMRA.JK", "SMRU.JK", "SMSM.JK", "SNLK.JK", "SOCI.JK", "SOFA.JK",
+    "SONA.JK", "SPMA.JK", "SPTO.JK", "SQMI.JK", "SRAJ.JK", "SRTG.JK", "SSIA.JK", "SOSS.JK", "SSTM.JK", "STAA.JK",
+    "STAR.JK", "STRK.JK", "STTP.JK", "SULI.JK", "SUNI.JK", "SUPR.JK", "SURE.JK", "SURI.JK", "SWID.JK", "TALF.JK",
+    "TAMA.JK", "TAMU.JK", "TAPG.JK", "TARA.JK", "TAXI.JK", "TBMS.JK", "TCPI.JK", "TEBE.JK", "TECH.JK", "TEGH.JK",
+    "TELE.JK", "TFAS.JK", "TGKA.JK", "TIFA.JK", "TINS.JK", "TIRA.JK", "TIRT.JK", "TKIM.JK", "TLKM.JK", "TMAS.JK",
+    "TMPO.JK", "TOBA.JK", "TOOL.JK", "TOWR.JK", "TPIA.JK", "TPMA.JK", "TRAM.JK", "TRIN.JK", "TRIS.JK", "TRJA.JK",
+    "TRON.JK", "TRUK.JK", "TSPC.JK", "TUGU.JK", "TYRE.JK", "UANG.JK", "ULTJ.JK", "UNIC.JK", "UNIQ.JK", "UNIT.JK",
+    "UNTR.JK", "UNVR.JK", "URBN.JK", "UVCR.JK", "VAST.JK", "VERN.JK", "VICO.JK", "VINS.JK", "VISI.JK", "VKTR.JK",
+    "VRNA.JK", "WAPO.JK", "WEHA.JK", "WGSH.JK", "WIFI.JK", "WIIM.JK", "WINS.JK", "WIRG.JK", "WMPP.JK", "WTON.JK",
+    "XASI.JK", "XBIO.JK", "XBNI.JK", "XBNP.JK", "XISC.JK", "XIJI.JK", "XIPI.JK", "XLBF.JK", "XOID.JK", "XPLN.JK",
+    "YELO.JK", "YPAS.JK", "YUAN.JK", "ZATA.JK", "ZBRA.JK", "ZINC.JK", "ZYRX.JK"
 ]
 
 def round_idx_tick(price):
@@ -157,13 +218,13 @@ def send_telegram_alert(bot_token, chat_id, df_signals, strategy_name):
         return False, f"Error koneksi: {str(e)}"
 
 @st.cache_data(ttl=1800)
-def scan_issi_stocks(tickers, strategy_mode, modal_trading, risk_pct, sl_mult, tp_mult):
+def scan_issi_stocks(tickers_tuple, strategy_mode, modal_trading, risk_pct, sl_mult, tp_mult):
     results = []
     progress_bar = st.progress(0)
-    total = len(tickers)
+    total = len(tickers_tuple)
     max_risk_rp = modal_trading * (risk_pct / 100.0)
 
-    for i, ticker in enumerate(tickers):
+    for i, ticker in enumerate(tickers_tuple):
         try:
             stock = yf.Ticker(ticker)
             df = stock.history(period="1y")
@@ -238,6 +299,9 @@ def scan_issi_stocks(tickers, strategy_mode, modal_trading, risk_pct, sl_mult, t
     progress_bar.empty()
     return pd.DataFrame(results)
 
+# ---------------------------------------------------------
+# TAMPILAN UTAMA (MENGGANTIKAN SIDEBAR MENJADI PANEL UTAMA)
+# ---------------------------------------------------------
 ihsg_price, ihsg_chg, ihsg_pct = get_ihsg_data()
 col_title, col_ihsg = st.columns([3, 1])
 with col_title:
@@ -248,14 +312,131 @@ with col_ihsg:
 
 st.divider()
 
-with st.sidebar:
-    st.header("⚙️ Navigasi Utama")
-    menu = st.radio("Pilih Halaman:", ["🔍 Screener & Trading Plan", "📈 Analisis Chart & SL/TP", "📚 Kamus Rumus", "📂 Kelola Daftar ISSI"])
-    strategy = st.selectbox("Pilih Strategi:", [
+# Panel Kontrol Utama di Halaman Atas
+st.subheader("⚙️ Panel Kontrol & Pengaturan Strategi")
+c_menu, c_strat = st.columns(2)
+with c_menu:
+    menu = st.selectbox("Pilih Halaman Utama:", ["🔍 Screener & Trading Plan", "📈 Analisis Chart & SL/TP", "📚 Kamus Rumus", "📂 Daftar Saham ISSI"])
+with c_strat:
+    strategy = st.selectbox("Pilih Strategi Screener:", [
         "Semua Saham ISSI", "Swing Trading (Uptrend + Momentum)",
         "Bandarmologi / Volume Spike", "Value Investing Syariah (Murah & Sehat)", "BSJP (Beli Sore Jual Pagi)"
     ])
-    with st.expander("🛡️ Manajemen Risiko (ATR)", expanded=True):
+
+with st.expander("🎛️ Pengaturan Lanjutan (Manajemen Risiko & Filter)", expanded=False):
+    r1, r2, r3 = st.columns(3)
+    with r1:
         modal_trading = st.number_input("Modal Trading (Rp)", min_value=100000, value=10000000, step=1000000)
         risk_pct = st.slider("Risiko / Trade (%)", 0.5, 5.0, 2.0, step=0.5)
+    with r2:
         sl_mult = st.slider("Stop Loss (x ATR)", 1.0, 3.0, 1.5, step=0.5)
+        tp_mult = st.slider("Take Profit (x ATR)", 1.5, 6.0, 3.0, step=0.5)
+    with r3:
+        min_price = st.number_input("Harga Minimal (Rp)", min_value=50, value=50, step=50)
+        max_rsi = st.slider("Maksimal RSI (14)", 20, 100, 80)
+        only_buy = st.checkbox("Hanya Sinyal BUY / STRONG BUY", value=False)
+
+with st.expander("📲 Pengaturan Bot Telegram", expanded=False):
+    t1, t2 = st.columns(2)
+    with t1:
+        tg_token = st.text_input("Telegram Bot Token", type="password")
+    with t2:
+        tg_chat_id = st.text_input("Telegram Chat ID")
+
+# Tombol Refresh Utama
+if st.button("🔄 Refresh Data Pasar & Jalankan Screener", use_container_width=True, type="primary"):
+    st.cache_data.clear()
+    st.rerun()
+
+st.divider()
+
+# Inisialisasi daftar ISSI di session state
+if 'issi_list' not in st.session_state:
+    st.session_state['issi_list'] = EXCEL_ISSI_TICKERS
+
+# ---------------------------------------------------------
+# ISI KONTEN MENU HALAMAN
+# ---------------------------------------------------------
+if menu == "🔍 Screener & Trading Plan":
+    df_screen = scan_issi_stocks(tuple(st.session_state['issi_list']), strategy, modal_trading, risk_pct, sl_mult, tp_mult)
+    
+    if not df_screen.empty:
+        df_filtered = df_screen[(df_screen['Harga'] >= min_price) & (df_screen['RSI (14)'] <= max_rsi)]
+        if only_buy:
+            df_filtered = df_filtered[df_filtered['Rekomendasi'].str.contains("BUY")]
+        df_filtered = df_filtered.sort_values(by="Skor", ascending=False)
+        
+        # Kotak KPI Rekomendasi Saham
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Total Saham Lolos", f"{len(df_filtered)} Emiten")
+        m2.metric("Sinyal Strong Buy", f"{len(df_filtered[df_filtered['Rekomendasi'] == '🟢 STRONG BUY'])} Emiten")
+        m3.metric("Batas Risiko / Trade", f"Rp {int(modal_trading * (risk_pct/100)):,}")
+        m4.metric("Rata-rata R/R Ratio", f"1 : {df_filtered['Risk/Reward'].mean():.2f}" if len(df_filtered) > 0 else "-")
+        
+        st.markdown("---")
+        col_sub, col_tg = st.columns([3, 1])
+        with col_sub:
+            st.subheader(f"📋 Hasil Screening & Trading Plan: {strategy}")
+        with col_tg:
+            if st.button("📲 Kirim Sinyal ke Telegram", use_container_width=True):
+                ok, status_msg = send_telegram_alert(tg_token, tg_chat_id, df_filtered, strategy)
+                if ok:
+                    st.success(status_msg)
+                else:
+                    st.error(status_msg)
+        
+        display_cols = ['Kode', 'Rekomendasi', 'Harga', 'Perubahan (%)', 'Stop Loss', 'Target Profit', 'Risk/Reward', 'Saran Lot', 'RVOL (x)', 'RSI (14)', 'PER (x)', 'PBV (x)', 'Alasan Sinyal']
+        st.dataframe(df_filtered[display_cols], use_container_width=True, hide_index=True)
+        
+        csv = df_filtered[display_cols].to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Download Hasil Trading Plan (CSV)",
+            data=csv,
+            file_name=f"trading_plan_issi_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv"
+        )
+    else:
+        st.warning("Tidak ada saham ISSI yang memenuhi kriteria strategi ini saat ini.")
+
+elif menu == "📈 Analisis Chart & SL/TP":
+    st.subheader("📈 Grafik Teknikal Interaktif & Level Otomatis")
+    clean_tickers = [t.replace(".JK", "") for t in st.session_state['issi_list']]
+    selected_stock = st.selectbox("Pilih Kode Saham ISSI:", clean_tickers)
+    
+    if selected_stock:
+        df_chart = calculate_indicators(yf.Ticker(f"{selected_stock}.JK").history(period="6mo"))
+        if not df_chart.empty:
+            last_row = df_chart.iloc[-1]
+            entry_p = round_idx_tick(last_row['Close'])
+            sl_p = max(50, round_idx_tick(entry_p - (sl_mult * last_row['ATR'])))
+            tp_p = round_idx_tick(entry_p + (tp_mult * last_row['ATR']))
+            
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Harga Acuan Entry", f"Rp {entry_p:,}")
+            c2.metric("Target Profit (TP)", f"Rp {tp_p:,}")
+            c3.metric("Batas Stop Loss (SL)", f"Rp {sl_p:,}")
+            
+            fig = go.Figure()
+            fig.add_trace(go.Candlestick(x=df_chart.index, open=df_chart['Open'], high=df_chart['High'], low=df_chart['Low'], close=df_chart['Close'], name="Harga"))
+            fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['EMA20'], line=dict(color='#00E5FF', width=1.5), name="EMA 20"))
+            fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['SMA50'], line=dict(color='#FFAB00', width=1.5), name="SMA 50"))
+            fig.add_hline(y=tp_p, line_dash="dash", line_color="#00E676", annotation_text=f"TP: Rp {tp_p:,}")
+            fig.add_hline(y=sl_p, line_dash="dash", line_color="#FF5252", annotation_text=f"SL: Rp {sl_p:,}")
+            fig.update_layout(template="plotly_dark", height=500, xaxis_rangeslider_visible=False, title=f"Visualisasi Trading Plan {selected_stock}")
+            st.plotly_chart(fig, use_container_width=True)
+
+elif menu == "📚 Kamus Rumus":
+    st.subheader("📚 Penjelasan Rumus & Strategi Kuantitatif")
+    st.markdown("""
+    * **Trend Following (EMA 20 & SMA 50):** Menguji kepastian arah tren jangka pendek dan menengah agar terhindar dari *downtrend*.
+    * **Momentum (RSI 14 & MACD):** Mendeteksi area pantulan sehat (RSI 30–45) dan persilangan garis MACD yang mengonfirmasi momentum beli.
+    * **Bandarmologi (RVOL):** Memantau lonjakan volume transaksi harian terhadap rata-rata 20 hari ($\ge 1.5\text{x}$) sebagai indikasi masuknya akumulasi dana besar.
+    * **Manajemen Risiko ATR:** Mengukur volatilitas harga secara dinamis untuk menentukan jarak *Stop Loss* dan *Take Profit* yang objektif.
+    """)
+
+elif menu == "📂 Daftar Saham ISSI":
+    st.subheader("📂 Daftar Lengkap Emiten Syariah ISSI (574+ Saham)")
+    st.write(f"Total emiten aktif yang tersimpan dalam sistem: **{len(st.session_state['issi_list'])} emiten**")
+    
+    df_list_view = pd.DataFrame({"No": range(1, len(st.session_state['issi_list'])+1), "Kode Saham": st.session_state['issi_list']})
+    st.dataframe(df_list_view, use_container_width=True, hide_index=True)
