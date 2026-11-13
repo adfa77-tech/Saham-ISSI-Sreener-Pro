@@ -81,23 +81,16 @@ def generate_recommendation(row):
         score -= 1
     if row['RVOL'] >= 1.3:
         score += 2; reasons.append(f"Vol Spike {row['RVOL']:.1f}x")
-    rec = "🟢 STRONG BUY" if score >= 4 else ("🔵 BUY / AKUMULASI" if score >= 2 else ("🟡 WATCHLIST" if score >= 0 else "🔴 AVOID"))
-    return rec, score, " | ".join(reasons) if reasons else "Konsolidasi"
-
-def send_telegram_alert(bot_token, chat_id, df_signals, strategy_name):
-    if not bot_token or not chat_id:
-        return False, "Token Bot atau Chat ID belum diisi."
-    top = df_signals[df_signals['Rekomendasi'].str.contains("BUY")].head(10)
-    if top.empty:
-        return False, "Tidak ada sinyal BUY hari ini."
-    msg = f"🕌 *SINYAL SCREENER ISSI*\n🎯 _{strategy_name}_\n━━━━━━━━━━━━━━━━━━\n\n"
-    for _, r in top.iterrows():
-        msg += f"*{r['Kode']}* — {r['Rekomendasi']}\n• Entry: Rp {int(r['Harga']):,} ({r['Perubahan (%)']:+.2f}%)\n• 🎯 TP: Rp {int(r['Target Profit']):,} | 🛑 SL: Rp {int(r['Stop Loss']):,}\n• 📦 Lot: {int(r['Saran Lot'])} lot | R/R: 1:{r['Risk/Reward']}\n\n"
-    try:
-        res = requests.post(f"https://api.telegram.org/bot{bot_token}/sendMessage", json={"chat_id": chat_id, "text": msg, "parse_mode": "Markdown"}, timeout=10)
-        return (True, "Terkirim ke Telegram!") if res.status_code == 200 else (False, f"Gagal: {res.text}")
-    except Exception as e:
-        return False, f"Error: {str(e)}"
+    
+    if score >= 4:
+        rec, action = "🟢 STRONG BUY", "BUY"
+    elif score >= 2:
+        rec, action = "🔵 BUY / AKUMULASI", "BUY"
+    elif score >= 0:
+        rec, action = "🟡 WATCHLIST / HOLD", "HOLD"
+    else:
+        rec, action = "🔴 AVOID / SELL", "SELL"
+    return rec, action, score, " | ".join(reasons) if reasons else "Konsolidasi"
 
 @st.cache_data(ttl=1800)
 def fetch_all_issi_market_data(tickers):
@@ -122,14 +115,26 @@ def scan_issi_stocks(tickers, strategy_mode, modal_trading, risk_pct, sl_mult, t
     with st.spinner("⚡ Memindai seluruh saham ISSI secara batch..."):
         market_data = fetch_all_issi_market_data(tuple(tickers))
     results, max_risk_rp = [], modal_trading * (risk_pct / 100.0)
-    for ticker, df_raw in market_data.items():
+    for idx, (ticker, df_raw) in enumerate(market_data.items(), 1):
         try:
             df = calculate_indicators(df_raw)
             latest, prev = df.iloc[-1], df.iloc[-2]
             if latest['Volume'] <= 0 or pd.isna(latest['Close']):
                 continue
-            pct_chg = ((latest['Close'] - prev['Close']) / prev['Close']) * 100
-            entry = round_idx_tick(latest['Close'])
+            
+            open_p = round_idx_tick(latest['Open'])
+            prev_p = round_idx_tick(prev['Close'])
+            high_p = round_idx_tick(latest['High'])
+            low_p = round_idx_tick(latest['Low'])
+            close_p = round_idx_tick(latest['Close'])
+            pct_chg = round(((close_p - prev_p) / prev_p) * 100, 2)
+            
+            # Pivot Points Standard
+            pivot = round_idx_tick((high_p + low_p + close_p) / 3)
+            support = round_idx_tick((2 * pivot) - high_p)
+            resist = round_idx_tick((2 * pivot) - low_p)
+            
+            entry = close_p
             sl = max(50, round_idx_tick(entry - (sl_mult * latest['ATR'])))
             tp = round_idx_tick(entry + (tp_mult * latest['ATR']))
             risk_ps = max(1, entry - sl)
@@ -137,17 +142,43 @@ def scan_issi_stocks(tickers, strategy_mode, modal_trading, risk_pct, sl_mult, t
             lots = max(1, int((max_risk_rp / risk_ps) // 100))
             if (lots * 100 * entry) > modal_trading:
                 lots = max(0, int(modal_trading // (100 * entry)))
+            
             row = {
-                'Kode': ticker.replace(".JK", ""), 'Harga': entry, 'Perubahan (%)': round(pct_chg, 2),
-                'Volume': int(latest['Volume']), 'Stop Loss': sl, 'Target Profit': tp, 'Risk/Reward': rr,
-                'Saran Lot': lots, 'RVOL (x)': round(latest['RVOL'], 2), 'RSI (14)': round(latest['RSI'], 1),
-                'EMA20': round(latest['EMA20'], 0), 'SMA50': round(latest['SMA50'], 0) if pd.notna(latest['SMA50']) else 0,
-                'MACD': round(latest['MACD'], 2), 'Signal': round(latest['Signal'], 2), 'Close': latest['Close']
+                'No': idx,
+                'Nama Saham': ticker.replace(".JK", ""),
+                'Harga': entry,
+                'Open': open_p,
+                'Prev': prev_p,
+                'High': high_p,
+                'Low': low_p,
+                'Close': close_p,
+                'Chg (%)': pct_chg,
+                'Volume': int(latest['Volume']),
+                'Support': support,
+                'Pivot': pivot,
+                'Resist': resist,
+                'Harga Buy': entry,
+                'Sell': tp,
+                'Jenis Rekomendasi': 'HOLD',
+                'Action': 'HOLD',
+                'Skor': 0,
+                'Alasan': '',
+                'Stop Loss': sl,
+                'Target Profit': tp,
+                'Risk/Reward': rr,
+                'Saran Lot': lots,
+                'RVOL (x)': round(latest['RVOL'], 2),
+                'RSI (14)': round(latest['RSI'], 1),
+                'EMA20': round(latest['EMA20'], 0),
+                'SMA50': round(latest['SMA50'], 0) if pd.notna(latest['SMA50']) else 0
             }
-            rec, score, reason = generate_recommendation(row)
-            row['Rekomendasi'], row['Skor'], row['Alasan Sinyal'] = rec, score, reason
+            
+            rec, action, score, reason = generate_recommendation(row)
+            row['Jenis Rekomendasi'] = rec
+            row['Action'] = action
+            row['Skor'] = score
+            row['Alasan'] = reason
 
-            # Pilihan Strategi dengan Rumus yang Lebih Optimal & Akurat
             if strategy_mode == "Semua Saham ISSI":
                 results.append(row)
             elif strategy_mode == "Swing Trading (Uptrend + Momentum)" and latest['Close'] > latest['EMA20'] and 35 <= latest['RSI'] <= 65 and latest['MACD'] > latest['Signal']:
@@ -178,7 +209,7 @@ if 'issi_list' not in st.session_state:
 st.subheader("⚙️ Panel Kontrol & Pengaturan Strategi")
 c1, c2 = st.columns(2)
 with c1:
-    menu = st.selectbox("Pilih Menu Halaman:", ["🔍 Screener & Trading Plan", "📈 Analisis Chart & SL/TP", "📚 Kamus Rumus", "📂 Daftar Saham ISSI"])
+    menu = st.selectbox("Pilih Menu Halaman:", ["🔍 Screener & Trading Plan", "📈 Analisis Chart & SL/TP", "📚 Kamus Rumus", "📂 Daftar Saham ISSI", "📋 Kolom Lengkap Semua Saham ISSI"])
 with c2:
     strategy = st.selectbox("Pilih Strategi:", ["Semua Saham ISSI", "Swing Trading (Uptrend + Momentum)", "Bandarmologi / Volume Spike", "BSJP (Beli Sore Jual Pagi)"])
 
@@ -213,12 +244,12 @@ if menu == "🔍 Screener & Trading Plan":
     if not df_screen.empty:
         df_filtered = df_screen[(df_screen['Harga'] >= min_price) & (df_screen['RSI (14)'] <= max_rsi)]
         if only_buy:
-            df_filtered = df_filtered[df_filtered['Rekomendasi'].str.contains("BUY")]
+            df_filtered = df_filtered[df_filtered['Action'].str.contains("BUY")]
         df_filtered = df_filtered.sort_values(by="Skor", ascending=False)
         
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total Emiten Lolos", f"{len(df_filtered)}")
-        m2.metric("Sinyal Strong Buy", f"{len(df_filtered[df_filtered['Rekomendasi'] == '🟢 STRONG BUY'])}")
+        m2.metric("Sinyal Strong Buy", f"{len(df_filtered[df_filtered['Jenis Rekomendasi'] == '🟢 STRONG BUY'])}")
         m3.metric("Batas Risiko", f"Rp {int(modal_trading * (risk_pct/100)):,}")
         m4.metric("Rata-rata R/R", f"1 : {df_filtered['Risk/Reward'].mean():.2f}" if len(df_filtered) > 0 else "-")
         
@@ -228,16 +259,37 @@ if menu == "🔍 Screener & Trading Plan":
             st.subheader(f"📋 Hasil Screening: {strategy}")
         with col_tg:
             if st.button("📲 Kirim ke Telegram", use_container_width=True):
-                ok, msg = send_telegram_alert(tg_token, tg_chat_id, df_filtered, strategy)
+                # Format dataframe for telegram alert
+                df_tele = df_filtered.copy()
+                df_tele['Rekomendasi'] = df_tele['Jenis Rekomendasi']
+                ok, msg = send_telegram_alert(tg_token, tg_chat_id, df_tele, strategy)
                 st.success(msg) if ok else st.error(msg)
         
-        cols = ['Kode', 'Rekomendasi', 'Harga', 'Perubahan (%)', 'Stop Loss', 'Target Profit', 'Risk/Reward', 'Saran Lot', 'RVOL (x)', 'RSI (14)', 'Alasan Sinyal']
+        cols = ['Nama Saham', 'Jenis Rekomendasi', 'Harga', 'Chg (%)', 'Stop Loss', 'Target Profit', 'Risk/Reward', 'Saran Lot', 'RVOL (x)', 'RSI (14)', 'Alasan']
         st.dataframe(df_filtered[cols], use_container_width=True, hide_index=True)
         
         csv = df_filtered[cols].to_csv(index=False).encode('utf-8')
         st.download_button("📥 Download CSV", data=csv, file_name=f"issi_screener_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv")
     else:
         st.warning("Tidak ada saham yang memenuhi kriteria atau data sedang dimuat. Coba klik tombol Refresh di atas.")
+
+elif menu == "📋 Kolom Lengkap Semua Saham ISSI":
+    st.subheader("📋 Daftar Lengkap Semua Saham ISSI (Tabel Utama)")
+    st.write("Menampilkan seluruh emiten ISSI lengkap dengan data OHLCV, Support/Pivot/Resist, Harga Buy, Sell, dan Jenis Rekomendasi.")
+    
+    df_all = scan_issi_stocks(st.session_state['issi_list'], "Semua Saham ISSI", modal_trading, risk_pct, sl_mult, tp_mult)
+    if not df_all.empty:
+        col_order = [
+            'No', 'Nama Saham', 'Harga', 'Open', 'Prev', 'High', 'Low', 'Close', 
+            'Chg (%)', 'Volume', 'Support', 'Pivot', 'Resist', 'Harga Buy', 'Sell', 
+            'Jenis Rekomendasi', 'Alasan'
+        ]
+        st.dataframe(df_all[col_order], use_container_width=True, hide_index=True)
+        
+        csv_all = df_all[col_order].to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Download Tabel Lengkap (CSV)", data=csv_all, file_name=f"issi_kolom_lengkap_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv")
+    else:
+        st.warning("Gagal memuat data pasar. Coba klik tombol Refresh di atas.")
 
 elif menu == "📈 Analisis Chart & SL/TP":
     st.subheader("📈 Grafik Teknikal Interaktif & Level Otomatis")
@@ -274,7 +326,7 @@ elif menu == "📈 Analisis Chart & SL/TP":
 elif menu == "📚 Kamus Rumus":
     st.subheader("📚 Penjelasan Rumus & Strategi Kuantitatif")
     st.markdown("""
-    * **Semua Saham ISSI:** Menampilkan seluruh daftar 574+ emiten syariah terdaftar tanpa syarat filter strategi.
+    * **Semua Saham ISSI:** Menampilkan seluruh daftar emiten syariah terdaftar tanpa syarat filter strategi.
     * **Swing Trading:** Memindai saham yang berada di atas EMA20 dengan RSI sehat (35–65) dan MACD Golden Cross.
     * **Bandarmologi / Volume Spike:** Mendeteksi lonjakan volume (RVOL $\ge 1.5\text{x}$) di saat harga menguat.
     * **BSJP (Beli Sore Jual Pagi):** Menyaring emiten dengan momentum kenaikan intraday stabil menjelang penutupan sesi.
