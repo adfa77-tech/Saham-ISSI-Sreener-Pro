@@ -52,7 +52,7 @@ st.markdown("""
 if 'active_menu' not in st.session_state:
     st.session_state.active_menu = "Screener"
 
-# Header Navigasi Fungsional (Tanpa Judul Teks "ISSI Scalper")
+# Header Navigasi Fungsional
 col_brand, col_m1, col_m2, col_m3, col_space = st.columns([0.5, 1.2, 1.2, 1.2, 5.8])
 with col_m1:
     if st.button("Screener", use_container_width=True):
@@ -66,18 +66,17 @@ with col_m3:
 
 st.markdown("<hr style='border: 0.5px solid #21262d; margin-top: 5px; margin-bottom: 25px;'>", unsafe_allow_html=True)
 
+# Database Ticker Saham ISSI Lengkap Tanpa Bergantung pada File Eksternal
+RAW_ISSI = """AADI AALI ABMM ACES ADCP ADES ADMG ADMR ADRO AGAR AGII AIMS AKKU AKPI AKRA AKSI ALAN ALDO AMAN AMAR AMFG AMIN AMMN AMOR ANJT ANTM APEX APIC APLI ARCI ARKA ARKO ARNA ARTA ARTI ASBI ASDM ASII ASJT ASRI ATAP ATIC AUTO AVIA AXIO BABP BAJA BALI BANK BAPI BATA BAUT BAYU BBCA BBHI BBKP BBMD BBNI BBRI BBSI BBTN BBYB BCIC BDMN BEBS BEEF BEER BELI BESS BEST BFIN BGTG BHIT BIKA BINA BINO BIPI BIRD BISI BITO BJBR BJTM BKDP BKSL BLTA BLTZ BLUE BMAS BMHS BMRI BMSR BMTR BNBA BNGA BNII BNLI BOBA BOGA BOLA BOLT BPTR BRAM BREN BRIS BRMS BRNA BSBK BSDE BSML BSSR BSWD BTPS BUAH BUDI BUKK BULL BUMI BUVA BVIC BWPT BYAN CAKK CAMP CARS CASA CASH CASS CBRE CBUT CCSI CEKA CENT CFIN CGAS CHEK CINT CITA CITY CLPI CMNP CMPP CMRY CNKO CNTX COCO CPIN CRAB CSIS CSMI CSRA CTBN CTRA CUAN DADA DATA DANA DEAL DEWI DFAM DGIK DGNS DIDX DIRA DMMX DNAR DOID DPNS DRMA DSFI DSNG DSSA DUCK DWGL EAST ECII EDGE EDIN EKAD ELIT ELSA ELPI EMDE ENAK ENRG ENZO EPAC EPMT ERAA ERTX ESIP ESSA ESTA ESTI ETWA EXCL FAPA FASW FILM FIMP FIRE FISH FPNI FREN FUTR FWCT GAMA GATE GBKA GEMA GEMS GGRM GGRP GHON GIAA GJTL GLVA GMFI GMTD GOLD GOLF GOOD GPRA GPSO GRPH GTBO GTSI GULA GZCO HADE HAIS HALO HATM HDIT HEAL HELI HERO HEXA HITS HKMU HMSP HOKI HOME HOMI HOPE HRME HRTA IATA IBFN IBOS ICBP ICON IDEA IDPR IFII IFSH IGAR IIKF IMAS IMJS IMPC INCO INDF INDS INKP INPC INPP INPS INRU INTA INTD INTP IOSP IPCC IPCM IPEH IPOL IPPE ISAT ISSP ITMA ITMG JATI JAWA JAYA JECC JGLE JKON JMAS JPFA JSMR JSPT JTPE KAEF KARW KAYU KEEN KEIS KELN KDTN KEJU KICI KIJA KINO KJEN KKGI KLBF KMDS KOBX KOIN KOKA KONI KOPI KOTA KPIG KRAK LABS LAJU LAND LAPD LCKM LEAD LFLO LIFE LINK LION LMPI LMSH LPCK LPGI LPIN LPPF LPPS LPTA LRNA LSIP LUCK LUCY MABA MAGP MAIN MAMI MAPA MAPI MARI MARK MASB MAYA MBAP MBMA MBSS MBTO MCAS MDKA MEDC MEGA MENN MERK META MFMI MGLV MICE MIDI MIKA MINA MIRA MITI MKNT MKPI MLIA MLPL MLPT MMIX MMLP MNCN MOLI MPPA MPXL MRAT MREI MSIN MSKY MTDL MTEL MTMH MTSM MUTU MYOH NANO NICK NELY NEMI NEST NFCX NINE NLIQ NOBU NPGF NSSS NUSA NZIA OASA OBMD OCAP OKAS OLIV OMRE PADA PADI PALM PAMG PANI PARA PATK PBLE PBID PBRX PDES PEHA PEVE PGAS PGEO PGLI PGUN PICO PJAA PKPK PLAS PLIN PMJS PNBN PNBS PNGO PNIN PNSE POLA POLI POLL POLY POOL PORT POSA POWR PPRO PRAS PSAB PSDN PSGO PSSI PTBA PTDU PUDP PURA PURE PWON PYFA PZZA RAAM RAJA RANC RBMS RDTX REAL RELF RICY RIGS RISE RMKE ROCK ROTI RUIS RUNS SAFE SAGE SAID SAME SAMF SAPX SATU SBAT SBMA SCCO SCMA SCNP SCPI SDPC SDRA SEMA SGER SGRO SHIP SICO SIDO SILO SIMA SIMP SKLT SKRN SKYB SMIK SMIL SMKM SMMA SMMT SMRA SMRU SMSM SNLK SOCI SOFA SONA SPMA SPTO SQMI SRAJ SRTG SSIA SOSS SSTM STAA STAR STRK STTP SULI SUNI SUPR SURE SURI SWID TALF TAMA TAMU TAPG TARA TAXI TBMS TCPI TEBE TECH TEGH TELE TFAS TGKA TIFA TINS TIRA TIRT TKIM TLKM TMAS TMPO TOBA TOOL TOWR TPIA TPMA TRAM TRIN TRIS TRJA TRON TRUK TSPC TUGU TYRE UANG ULTJ UNIC UNIQ UNIT UNTR UNVR URBN UVCR VAST VERN VICO VINS VISI VKTR VRNA WAPO WEHA WGSH WIFI WIIM WINS WIRG WMPP WTON XASI XBIO XBNI XBNP XISC XIJI XIPI XLBF XOID XPLN YELO YPAS YUAN ZATA ZBRA ZINC ZYRX"""
+
 @st.cache_data
 def load_excel_data():
     try:
-        df = pd.read_excel('issi list.xlsx')
-        if 'ticker' in df.columns:
-            tickers = df['ticker'].dropna().astype(str).tolist()
-        else:
-            tickers = df.iloc[:, 0].dropna().astype(str).tolist()
+        tickers = RAW_ISSI.split()
         formatted = [t.strip().upper() + ".JK" for t in tickers if isinstance(t, str)]
         return formatted
     except Exception as e:
-        st.error(f"Gagal membaca file 'issi list.xlsx': {e}")
+        st.error(f"Gagal memuat data ticker: {e}")
         return []
 
 def fetch_and_compute_single(ticker):
@@ -109,7 +108,6 @@ def fetch_and_compute_single(ticker):
         low_52w = close.rolling(window=252, min_periods=50).min()
         
         pivot_20 = high.shift(1).rolling(window=20).max().iloc[-1]
-
         vol_ma50 = volume.rolling(window=50).mean().iloc[-1]
 
         delta = close.diff()
@@ -346,7 +344,7 @@ if st.session_state.active_menu == "Screener":
             <div class="metric-card">
                 <div style="color: #8b949e; font-size: 13px;">Total Saham ISSI Dipindai</div>
                 <div style="font-size: 22px; font-weight: bold; color: #ffffff; margin-top: 5px;">{len(df)}</div>
-                <div style="color: #58a6ff; font-size: 14px;">Database Excel JII70/ISSI</div>
+                <div style="color: #58a6ff; font-size: 14px;">Database ISSI Terintegrasi</div>
             </div>
             """, unsafe_allow_html=True)
         with c_box3:
@@ -398,7 +396,6 @@ if st.session_state.active_menu == "Screener":
             except AttributeError:
                 styled_df = df_display.style.applymap(color_coding, subset=['Chg', 'Alasan'])
                 
-            # Mengatur lebar kolom agar kolom No dan Nama Saham menyesuaikan besar huruf/kalimat secara optimal
             st.dataframe(
                 styled_df, 
                 use_container_width=True, 
@@ -409,10 +406,10 @@ if st.session_state.active_menu == "Screener":
                 }
             )
 
-            # --- BAGIAN CHART CANDLESTICK 6 BULAN LENGKAP DENGAN INDIKATOR ---
+            # --- BAGIAN CHART CANDLESTICK 6 BULAN ---
             st.markdown("---")
             st.markdown("### 📊 Analisis Grafik Teknikal Mendalam (6 Bulan Terakhir)")
-            selected_ticker = st.selectbox("Pilih Nama Saham untuk Memunculkan Grafik Lengkap (MA5, 20, 50, 150, 200, BB, Volume, MACD, RSI, Stoch):", df_passed['ticker'].tolist())
+            selected_ticker = st.selectbox("Pilih Nama Saham untuk Memunculkan Grafik Lengkap:", df_passed['ticker'].tolist())
 
             if selected_ticker:
                 with st.spinner(f"Memuat data historis grafik {selected_ticker}..."):
@@ -496,7 +493,7 @@ if st.session_state.active_menu == "Screener":
 # --- MENU 2: DAFTAR SAHAM ---
 elif st.session_state.active_menu == "Daftar Saham":
     st.markdown("### **Daftar Seluruh Saham ISSI (JII70 / Syariah)**")
-    st.markdown("<p style='color: #8b949e; font-size: 14px;'>Daftar lengkap ticker saham syariah dari file Excel Anda.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #8b949e; font-size: 14px;'>Daftar lengkap ticker saham syariah.</p>", unsafe_allow_html=True)
     
     tickers_list = load_excel_data()
     if tickers_list:
@@ -511,7 +508,7 @@ elif st.session_state.active_menu == "Daftar Saham":
             }
         )
     else:
-        st.warning("File 'issi list.xlsx' tidak ditemukan atau kosong.")
+        st.warning("Daftar saham kosong.")
 
 # --- MENU 3: STRATEGI ---
 elif st.session_state.active_menu == "Strategi":
