@@ -84,118 +84,145 @@ def load_excel_data():
         return []
 
 def fetch_and_compute_single(ticker):
+    """
+    Mengambil OHLCV valid terakhir dari Yahoo Finance.
+    Tidak membuat harga rekaan: baris yang dipakai harus memiliki Open, High,
+    Low, Close, dan Volume yang valid. Saham dengan histori pendek tetap
+    masuk menu Daftar Saham; indikator jangka panjang dapat belum tersedia.
+    """
     try:
-        data = yf.download(ticker, period="1y", progress=False)
+        data = yf.download(
+            ticker, period="1y", interval="1d",
+            progress=False, auto_adjust=False, threads=False
+        )
+        if data is None or data.empty:
+            return None
+
         if isinstance(data.columns, pd.MultiIndex):
             data.columns = data.columns.get_level_values(0)
-        if len(data) < 200:
+
+        required = ["Open", "High", "Low", "Close", "Volume"]
+        if not all(col in data.columns for col in required):
             return None
-        
-        close = data['Close']
-        high = data['High']
-        low = data['Low']
-        open_p = data['Open']
-        volume = data['Volume']
 
-        c_val = float(close.iloc[-1].item() if hasattr(close.iloc[-1], "item") else close.iloc[-1])
-        c_prev = float(close.iloc[-2].item() if hasattr(close.iloc[-2], "item") else close.iloc[-2])
-        c_open = float(open_p.iloc[-1].item() if hasattr(open_p.iloc[-1], "item") else open_p.iloc[-1])
-        c_high = float(high.iloc[-1].item() if hasattr(high.iloc[-1], "item") else high.iloc[-1])
-        c_low = float(low.iloc[-1].item() if hasattr(low.iloc[-1], "item") else low.iloc[-1])
-        c_vol = float(volume.iloc[-1].item() if hasattr(volume.iloc[-1], "item") else volume.iloc[-1])
-        chg_pct = (c_val / c_prev - 1) * 100
+        # Ambil sesi perdagangan terakhir yang seluruh OHLCV-nya valid.
+        data = data[required].replace([np.inf, -np.inf], np.nan)
+        valid = data.dropna(subset=required)
+        if len(valid) < 2:
+            return None
 
-        ma50 = close.rolling(window=50).mean()
-        ma150 = close.rolling(window=150).mean()
-        ma200 = close.rolling(window=200).mean()
-        high_52w = close.rolling(window=252, min_periods=50).max()
-        low_52w = close.rolling(window=252, min_periods=50).min()
-        
-        pivot_20 = float(high.shift(1).rolling(window=20).max().iloc[-1])
-        vol_ma50 = float(volume.rolling(window=50).mean().iloc[-1])
+        row = valid.iloc[-1]
+        prev_row = valid.iloc[-2]
+        close = valid["Close"].astype(float)
+        high = valid["High"].astype(float)
+        low = valid["Low"].astype(float)
+        open_p = valid["Open"].astype(float)
+        volume = valid["Volume"].astype(float)
+
+        c_val = float(row["Close"])
+        c_prev = float(prev_row["Close"])
+        c_open = float(row["Open"])
+        c_high = float(row["High"])
+        c_low = float(row["Low"])
+        c_vol = float(row["Volume"])
+        chg_pct = ((c_val / c_prev) - 1) * 100 if c_prev else np.nan
+
+        ma50 = close.rolling(50, min_periods=50).mean()
+        ma150 = close.rolling(150, min_periods=150).mean()
+        ma200 = close.rolling(200, min_periods=200).mean()
+        high_52w = close.rolling(252, min_periods=2).max()
+        low_52w = close.rolling(252, min_periods=2).min()
+
+        pivot_series = high.shift(1).rolling(20, min_periods=2).max()
+        vol_ma50 = volume.rolling(50, min_periods=2).mean()
 
         delta = close.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rsi14 = float((100 - (100 / (1 + (gain / (loss + 1e-9))))).iloc[-1])
+        gain = delta.clip(lower=0).rolling(14, min_periods=2).mean()
+        loss = (-delta.clip(upper=0)).rolling(14, min_periods=2).mean()
+        rsi_series = 100 - (100 / (1 + gain / (loss + 1e-9)))
 
-        tr1 = high - low
-        tr2 = (high - close.shift()).abs()
-        tr3 = (low - close.shift()).abs()
-        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-        atr14 = float(tr.ewm(alpha=1/14, adjust=False).mean().iloc[-1])
+        tr = pd.concat([
+            high - low,
+            (high - close.shift()).abs(),
+            (low - close.shift()).abs()
+        ], axis=1).max(axis=1)
+        atr_series = tr.ewm(alpha=1/14, adjust=False).mean()
 
         ema12 = close.ewm(span=12, adjust=False).mean()
         ema26 = close.ewm(span=26, adjust=False).mean()
         macd_line = ema12 - ema26
         macd_signal = macd_line.ewm(span=9, adjust=False).mean()
-        macd_hist = float((macd_line - macd_signal).iloc[-1])
 
-        bb_mid = close.rolling(window=20).mean()
-        bb_std = close.rolling(window=20).std()
-        bb_upper = bb_mid + (2 * bb_std)
-        bb_lower = bb_mid - (2 * bb_std)
-        bb_pct_b = float(((c_val - bb_lower.iloc[-1]) / ((bb_upper.iloc[-1] - bb_lower.iloc[-1]) + 1e-9)) * 100)
+        bb_mid = close.rolling(20, min_periods=2).mean()
+        bb_std = close.rolling(20, min_periods=2).std()
+        bb_upper = bb_mid + 2 * bb_std
+        bb_lower = bb_mid - 2 * bb_std
+        bb_pct_b = ((c_val - bb_lower.iloc[-1]) /
+                    (bb_upper.iloc[-1] - bb_lower.iloc[-1] + 1e-9)) * 100
 
-        lowest_l14 = float(low.rolling(window=14).min().iloc[-1])
-        highest_h14 = float(high.rolling(window=14).max().iloc[-1])
-        stoch_k = float(((c_val - lowest_l14) / ((highest_h14 - lowest_l14) + 1e-9)) * 100)
+        lowest_l14 = low.rolling(14, min_periods=2).min().iloc[-1]
+        highest_h14 = high.rolling(14, min_periods=2).max().iloc[-1]
+        stoch_k = ((c_val - lowest_l14) /
+                   (highest_h14 - lowest_l14 + 1e-9)) * 100
 
         obv = (np.sign(close.diff()) * volume).fillna(0).cumsum()
-        obv_flow_20 = float(((obv.iloc[-1] - obv.iloc[-20]) / (volume.rolling(window=20).sum().iloc[-1] + 1e-9)) * 100)
-        dist_days = int(((close.diff() < 0) & (volume > volume.shift(1))).rolling(window=25).sum().iloc[-1])
+        vol20 = volume.rolling(20, min_periods=2).sum().iloc[-1]
+        obv_flow_20 = ((obv.iloc[-1] - obv.iloc[max(0, len(obv)-20)]) /
+                       (vol20 + 1e-9)) * 100
+        dist_days = int(((close.diff() < 0) & (volume > volume.shift(1)))
+                        .tail(25).sum())
 
-        range_15 = (high.rolling(15).max() - low.rolling(15).min()) / close
-        range_40_prev = (high.shift(15).rolling(40).max() - low.shift(15).rolling(40).min()) / close.shift(15)
-        vcp_ratio = float((range_15 / (range_40_prev + 1e-9)).iloc[-1])
+        range_15 = ((high.rolling(15, min_periods=2).max() -
+                     low.rolling(15, min_periods=2).min()) / close)
+        range_40_prev = ((high.shift(15).rolling(40, min_periods=2).max() -
+                          low.shift(15).rolling(40, min_periods=2).min()) /
+                         close.shift(15))
+        vcp_ratio = range_15.iloc[-1] / (range_40_prev.iloc[-1] + 1e-9)
 
-        ret_3m = float((c_val / close.iloc[-63] - 1) * 100) if len(close) >= 63 else 0.0
-        ret_6m = float((c_val / close.iloc[-126] - 1) * 100) if len(close) >= 126 else 0.0
-        ret_9m = float((c_val / close.iloc[-189] - 1) * 100) if len(close) >= 189 else 0.0
-        ret_12m = float((c_val / close.iloc[-252] - 1) * 100) if len(close) >= 252 else 0.0
-        avg_val_trx = float((close * volume).rolling(window=20).mean().iloc[-1])
+        def ret_period(n):
+            return float((c_val / close.iloc[-n-1] - 1) * 100) if len(close) > n else 0.0
 
-        res = {
-            'ticker': ticker.replace(".JK", ""),
-            'nama': ticker.replace(".JK", ""),
-            'open': c_open,
-            'prev': c_prev,
-            'high': c_high,
-            'low': c_low,
-            'close': c_val,
-            'chg': chg_pct,
-            'volume': c_vol,
-            'vol_ma50': vol_ma50,
-            'support': round(c_low * 0.97, 0),
-            'pivot_20': round(pivot_20, 0),
-            'resist': round(c_high * 1.03, 0),
-            'harga_beli': round(pivot_20, 0),
-            'harga_jual': round(pivot_20 + (2 * atr14), 0),
-            'jenis_rekom': "BUY (Breakout)" if c_val >= pivot_20 else "HOLD / WAIT",
-            'alasan_rekom': "Uptrend & Di Atas Pivot" if c_val >= pivot_20 else "Konsolidasi / Menunggu Konfirmasi",
-            'ma50': float(ma50.iloc[-1]),
-            'ma150': float(ma150.iloc[-1]),
-            'ma200': float(ma200.iloc[-1]),
-            'ma200_slope_positive': float(ma200.iloc[-1]) > float(ma200.iloc[-20]),
-            'high_52w': float(high_52w.iloc[-1]),
-            'low_52w': float(low_52w.iloc[-1]),
-            'rsi14': rsi14,
-            'atr14': atr14,
-            'macd_hist': macd_hist,
-            'bb_pct_b': bb_pct_b,
-            'stoch_k': stoch_k,
-            'obv_flow_20': obv_flow_20,
-            'dist_days': dist_days,
-            'vcp_ratio': vcp_ratio,
-            'ret_3m': ret_3m,
-            'ret_6m': ret_6m,
-            'ret_9m': ret_9m,
-            'ret_12m': ret_12m,
-            'avg_val_trx': avg_val_trx
+        pivot_20 = float(pivot_series.iloc[-1]) if pd.notna(pivot_series.iloc[-1]) else c_val
+        # Support/resistance dihitung dari rentang 20 sesi; fallback ke OHLC sesi valid.
+        support_val = low.tail(20).min()
+        resist_val = high.tail(20).max()
+
+        def last_num(series):
+            value = series.iloc[-1]
+            return float(value) if pd.notna(value) else np.nan
+
+        ma200_now = last_num(ma200)
+        ma200_before = float(ma200.iloc[-20]) if len(ma200) >= 20 and pd.notna(ma200.iloc[-20]) else np.nan
+
+        return {
+            "ticker": ticker.replace(".JK", ""),
+            "nama": ticker.replace(".JK", ""),
+            "open": c_open, "prev": c_prev, "high": c_high, "low": c_low,
+            "close": c_val, "chg": chg_pct, "volume": c_vol,
+            "vol_ma50": last_num(vol_ma50),
+            "support": float(support_val), "pivot_20": pivot_20,
+            "resist": float(resist_val), "harga_beli": pivot_20,
+            "harga_jual": float(pivot_20 + 2 * last_num(atr_series)),
+            "jenis_rekom": "BUY (Breakout)" if c_val >= pivot_20 else "HOLD / WAIT",
+            "alasan_rekom": "Harga di atas pivot" if c_val >= pivot_20 else "Menunggu konfirmasi",
+            "ma50": last_num(ma50), "ma150": last_num(ma150), "ma200": ma200_now,
+            "ma200_slope_positive": bool(pd.notna(ma200_now) and pd.notna(ma200_before) and ma200_now > ma200_before),
+            "high_52w": last_num(high_52w), "low_52w": last_num(low_52w),
+            "rsi14": last_num(rsi_series), "atr14": last_num(atr_series),
+            "macd_hist": last_num(macd_line - macd_signal),
+            "bb_pct_b": float(bb_pct_b) if pd.notna(bb_pct_b) else np.nan,
+            "stoch_k": float(stoch_k) if pd.notna(stoch_k) else np.nan,
+            "obv_flow_20": float(obv_flow_20),
+            "dist_days": dist_days,
+            "vcp_ratio": float(vcp_ratio) if pd.notna(vcp_ratio) else np.nan,
+            "ret_3m": ret_period(63), "ret_6m": ret_period(126),
+            "ret_9m": ret_period(189), "ret_12m": ret_period(252),
+            "avg_val_trx": float((close * volume).rolling(20, min_periods=2).mean().iloc[-1])
         }
-        return res
     except Exception:
+        # Ticker tanpa data valid dari Yahoo tidak diberi angka perkiraan.
         return None
+
 
 def run_screener_ultra_fast():
     tickers = load_excel_data()
@@ -233,7 +260,8 @@ def run_screener_ultra_fast():
         0.2 * df_res['ret_9m'] +
         0.2 * df_res['ret_12m']
     )
-    df_res['rs_rating'] = pd.qcut(df_res['rs_raw'].rank(method='first'), 99, labels=False) + 1
+    # Skala persentil 1-99 tanpa qcut agar scan tetap berjalan untuk jumlah data berapa pun.
+    df_res['rs_rating'] = (df_res['rs_raw'].rank(pct=True, method='average') * 99).clip(1, 99).round().astype(int)
 
     df_res['tt_1'] = (df_res['close'] > df_res['ma150']) & (df_res['close'] > df_res['ma200'])
     df_res['tt_2'] = df_res['ma150'] > df_res['ma200']
@@ -388,8 +416,6 @@ if st.session_state.active_menu == "Screener":
                     "Resist": f"{r['resist']:,.0f}".replace(",", "."),
                     "Harga Beli": f"{r['harga_beli']:,.0f}".replace(",", "."),
                     "Harga Jual": f"{r['harga_jual']:,.0f}".replace(",", "."),
-                    "Waktu Beli": r['waktu_beli'],
-                    "Waktu Jual": r['waktu_jual'],
                     "Alasan": r['alasan']
                 })
 
