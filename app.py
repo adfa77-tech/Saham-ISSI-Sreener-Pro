@@ -3,11 +3,15 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import requests
 from datetime import datetime
 
-st.set_page_config(page_title="ISSI Pro Screener", page_icon="📈", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(
+    page_title="ISSI Pro Screener",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
 st.markdown("""
 <style>
@@ -92,7 +96,7 @@ def send_telegram_alert(bot_token, chat_id, df_signals, strategy_name):
     for _, r in top.iterrows():
         msg += f"*{r['Kode']}* — {r['Rekomendasi']}\n• Entry: Rp {int(r['Harga']):,} ({r['Perubahan (%)']:+.2f}%)\n• 🎯 TP: Rp {int(r['Target Profit']):,} | 🛑 SL: Rp {int(r['Stop Loss']):,}\n• 📦 Lot: {int(r['Saran Lot'])} lot | R/R: 1:{r['Risk/Reward']}\n\n"
     try:
-        res = requests.post(f"https://telegram.org{bot_token}/sendMessage", json={"chat_id": chat_id, "text": msg, "parse_mode": "Markdown"}, timeout=10)
+        res = requests.post(f"https://api.telegram.org/bot{bot_token}/sendMessage", json={"chat_id": chat_id, "text": msg, "parse_mode": "Markdown"}, timeout=10)
         return (True, "Terkirim ke Telegram!") if res.status_code == 200 else (False, f"Gagal: {res.text}")
     except Exception as e:
         return False, f"Error: {str(e)}"
@@ -107,7 +111,7 @@ def fetch_all_issi_market_data(tickers):
             for t in chunk:
                 try:
                     if t in data.columns.get_level_values(0):
-                        df_t = data[t].dropna(subset=['Close'])
+                        df_t = flatten_df(data[t]).dropna(subset=['Close'])
                         if len(df_t) >= 30:
                             all_dfs[t] = df_t
                 except Exception:
@@ -117,8 +121,8 @@ def fetch_all_issi_market_data(tickers):
     return all_dfs
 
 def scan_issi_stocks(tickers, strategy_mode, modal_trading, risk_pct, sl_mult, tp_mult):
-    with st.spinner("⚡ Memindai 574+ saham ISSI secara batch (8-12 detik)..."):
-        market_data = fetch_all_issi_market_data(tickers)
+    with st.spinner("⚡ Memindai seluruh saham ISSI secara batch..."):
+        market_data = fetch_all_issi_market_data(tuple(tickers))
     results, max_risk_rp = [], modal_trading * (risk_pct / 100.0)
     for ticker, df_raw in market_data.items():
         try:
@@ -144,3 +148,142 @@ def scan_issi_stocks(tickers, strategy_mode, modal_trading, risk_pct, sl_mult, t
             }
             rec, score, reason = generate_recommendation(row)
             row['Rekomendasi'], row['Skor'], row['Alasan Sinyal'] = rec, score, reason
+
+            if strategy_mode == "Semua Saham ISSI":
+                results.append(row)
+            elif strategy_mode == "Swing Trading (Uptrend + Momentum)" and latest['Close'] > latest['EMA20'] and 40 <= latest['RSI'] <= 68 and latest['MACD'] > latest['Signal']:
+                results.append(row)
+            elif strategy_mode == "Bandarmologi / Volume Spike" and latest['RVOL'] >= 1.3 and pct_chg > 0:
+                results.append(row)
+            elif strategy_mode == "BSJP (Beli Sore Jual Pagi)" and pct_chg >= 1.5 and latest['RVOL'] >= 1.2:
+                results.append(row)
+        except Exception:
+            continue
+    return pd.DataFrame(results)
+
+# HEADER UTAMA & IHSG
+ihsg_price, ihsg_chg, ihsg_pct = get_ihsg_data()
+col_t, col_i = st.columns([3, 1])
+with col_t:
+    st.title("🕌 ISSI Pro Stock Screener")
+    st.caption("Penyaring Saham Syariah BEI + Kalkulator Risiko ATR + Batch Downloader Cepat")
+with col_i:
+    st.metric("📊 IHSG", f"{ihsg_price:,.2f}" if ihsg_price > 0 else "Memuat...", f"{ihsg_chg:+.2f} ({ihsg_pct:+.2f}%)")
+
+st.divider()
+
+# PANEL KONTROL UTAMA (DI HALAMAN UTAMA)
+if 'issi_list' not in st.session_state:
+    st.session_state['issi_list'] = EXCEL_ISSI_TICKERS
+
+st.subheader("⚙️ Panel Kontrol & Pengaturan Strategi")
+c1, c2 = st.columns(2)
+with c1:
+    menu = st.selectbox("Pilih Menu Halaman:", ["🔍 Screener & Trading Plan", "📈 Analisis Chart & SL/TP", "📚 Kamus Rumus", "📂 Daftar Saham ISSI"])
+with c2:
+    strategy = st.selectbox("Pilih Strategi:", ["Semua Saham ISSI", "Swing Trading (Uptrend + Momentum)", "Bandarmologi / Volume Spike", "BSJP (Beli Sore Jual Pagi)"])
+
+with st.expander("🎛️ Pengaturan Manajemen Risiko & Filter", expanded=False):
+    f1, f2, f3 = st.columns(3)
+    with f1:
+        modal_trading = st.number_input("Modal Trading (Rp)", min_value=100000, value=10000000, step=1000000)
+        risk_pct = st.slider("Risiko / Trade (%)", 0.5, 5.0, 2.0, step=0.5)
+    with f2:
+        sl_mult = st.slider("Stop Loss (x ATR)", 1.0, 3.0, 1.5, step=0.5)
+        tp_mult = st.slider("Take Profit (x ATR)", 1.5, 6.0, 3.0, step=0.5)
+    with f3:
+        min_price = st.number_input("Harga Minimal (Rp)", min_value=0, value=0, step=50)
+        max_rsi = st.slider("Maksimal RSI (14)", 20, 100, 100)
+        only_buy = st.checkbox("Hanya Sinyal BUY / STRONG BUY", value=False)
+    
+    t1, t2 = st.columns(2)
+    with t1:
+        tg_token = st.text_input("Telegram Bot Token", type="password")
+    with t2:
+        tg_chat_id = st.text_input("Telegram Chat ID")
+
+if st.button("🔄 Refresh Data Pasar & Jalankan Screener", use_container_width=True, type="primary"):
+    st.cache_data.clear()
+    st.rerun()
+
+st.divider()
+
+# KONTEN HALAMAN
+if menu == "🔍 Screener & Trading Plan":
+    df_screen = scan_issi_stocks(st.session_state['issi_list'], strategy, modal_trading, risk_pct, sl_mult, tp_mult)
+    if not df_screen.empty:
+        df_filtered = df_screen[(df_screen['Harga'] >= min_price) & (df_screen['RSI (14)'] <= max_rsi)]
+        if only_buy:
+            df_filtered = df_filtered[df_filtered['Rekomendasi'].str.contains("BUY")]
+        df_filtered = df_filtered.sort_values(by="Skor", ascending=False)
+        
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Total Emiten Lolos", f"{len(df_filtered)}")
+        m2.metric("Sinyal Strong Buy", f"{len(df_filtered[df_filtered['Rekomendasi'] == '🟢 STRONG BUY'])}")
+        m3.metric("Batas Risiko", f"Rp {int(modal_trading * (risk_pct/100)):,}")
+        m4.metric("Rata-rata R/R", f"1 : {df_filtered['Risk/Reward'].mean():.2f}" if len(df_filtered) > 0 else "-")
+        
+        st.markdown("---")
+        col_sub, col_tg = st.columns([3, 1])
+        with col_sub:
+            st.subheader(f"📋 Hasil Screening: {strategy}")
+        with col_tg:
+            if st.button("📲 Kirim ke Telegram", use_container_width=True):
+                ok, msg = send_telegram_alert(tg_token, tg_chat_id, df_filtered, strategy)
+                st.success(msg) if ok else st.error(msg)
+        
+        cols = ['Kode', 'Rekomendasi', 'Harga', 'Perubahan (%)', 'Stop Loss', 'Target Profit', 'Risk/Reward', 'Saran Lot', 'RVOL (x)', 'RSI (14)', 'Alasan Sinyal']
+        st.dataframe(df_filtered[cols], use_container_width=True, hide_index=True)
+        
+        csv = df_filtered[cols].to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Download CSV", data=csv, file_name=f"issi_screener_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv")
+    else:
+        st.warning("Tidak ada saham yang memenuhi kriteria atau data sedang dimuat. Coba klik tombol Refresh di atas.")
+
+elif menu == "📈 Analisis Chart & SL/TP":
+    st.subheader("📈 Grafik Teknikal Interaktif & Level Otomatis")
+    clean_tickers = [t.replace(".JK", "") for t in st.session_state['issi_list']]
+    selected_stock = st.selectbox("Pilih Kode Saham ISSI:", clean_tickers)
+    
+    if selected_stock:
+        try:
+            df_chart = calculate_indicators(flatten_df(yf.Ticker(f"{selected_stock}.JK").history(period="6mo")))
+            if not df_chart.empty:
+                last_row = df_chart.iloc[-1]
+                entry_p = round_idx_tick(last_row['Close'])
+                sl_p = max(50, round_idx_tick(entry_p - (sl_mult * last_row['ATR'])))
+                tp_p = round_idx_tick(entry_p + (tp_mult * last_row['ATR']))
+                
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Harga Acuan Entry", f"Rp {entry_p:,}")
+                c2.metric("Target Profit (TP)", f"Rp {tp_p:,}")
+                c3.metric("Batas Stop Loss (SL)", f"Rp {sl_p:,}")
+                
+                fig = go.Figure()
+                fig.add_trace(go.Candlestick(x=df_chart.index, open=df_chart['Open'], high=df_chart['High'], low=df_chart['Low'], close=df_chart['Close'], name="Harga"))
+                fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['EMA20'], line=dict(color='#00E5FF', width=1.5), name="EMA 20"))
+                fig.add_trace(go.Scatter(x=df_chart.unstack() if False else df_chart.index, y=df_chart['SMA50'], line=dict(color='#FFAB00', width=1.5), name="SMA 50"))
+                fig.add_hline(y=tp_p, line_dash="dash", line_color="#00E676", annotation_text=f"TP: Rp {tp_p:,}")
+                fig.add_hline(y=sl_p, line_dash="dash", line_color="#FF5252", annotation_text=f"SL: Rp {sl_p:,}")
+                fig.update_layout(template="plotly_dark", height=500, xaxis_rangeslider_visible=False, title=f"Visualisasi Trading Plan {selected_stock}")
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("Data chart tidak tersedia.")
+        except Exception as e:
+            st.error(f"Gagal memuat chart: {str(e)}")
+
+elif menu == "📚 Kamus Rumus":
+    st.subheader("📚 Penjelasan Rumus & Strategi Kuantitatif")
+    st.markdown("""
+    * **Semua Saham ISSI:** Menampilkan seluruh daftar 574+ emiten syariah terdaftar tanpa syarat filter strategi.
+    * **Trend Following (EMA 20 & SMA 50):** Menguji arah tren jangka pendek dan menengah.
+    * **Momentum (RSI 14):** Mendeteksi area pantulan sehat (30–48) dan momentum kuat (48–68).
+    * **Bandarmologi (RVOL):** Memantau lonjakan volume transaksi harian terhadap rata-rata 20 hari ($\ge 1.3\text{x}$).
+    * **Manajemen Risiko ATR:** Menentukan jarak Stop Loss dan Take Profit secara dinamis berdasarkan volatilitas harga.
+    """)
+
+elif menu == "📂 Daftar Saham ISSI":
+    st.subheader("📂 Daftar Lengkap Emiten Syariah ISSI (574+ Saham)")
+    st.write(f"Total emiten aktif yang tersimpan dalam sistem: **{len(st.session_state['issi_list'])} emiten**")
+    df_list_view = pd.DataFrame({"No": range(1, len(st.session_state['issi_list'])+1), "Kode Saham": st.session_state['issi_list']})
+    st.dataframe(df_list_view, use_container_width=True, hide_index=True)
