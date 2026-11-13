@@ -177,7 +177,7 @@ def scan_issi_stocks(tickers, strategy_mode, modal_trading, risk_pct, sl_mult, t
 
             entry_price = round_idx_tick(latest['Close'])
             sl_price = max(50, round_idx_tick(entry_price - (sl_mult * latest['ATR'])))
-            tp_price = round_idx_tick(entry_price + (tp_mult * latest['ATR'])))
+            tp_price = round_idx_tick(entry_price + (tp_mult * latest['ATR']))
 
             risk_per_share = max(1, entry_price - sl_price)
             rr_ratio = round(max(0, tp_price - entry_price) / risk_per_share, 2)
