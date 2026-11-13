@@ -52,7 +52,7 @@ st.markdown("""
 if 'active_menu' not in st.session_state:
     st.session_state.active_menu = "Screener"
 
-# POSISI JUDUL UTAMA DI PALING ATAS
+# POSISI JUDUL UTAMA DI PALING ATAS HALAMAN
 st.markdown("## **Screener Ketat Saham ISSI**")
 st.markdown("<hr style='border: 0.5px solid #21262d; margin-top: 0px; margin-bottom: 15px;'>", unsafe_allow_html=True)
 
@@ -84,12 +84,6 @@ def load_excel_data():
         return []
 
 def fetch_and_compute_single(ticker):
-    """
-    Mengambil OHLCV valid terakhir dari Yahoo Finance.
-    Tidak membuat harga rekaan: baris yang dipakai harus memiliki Open, High,
-    Low, Close, dan Volume yang valid. Saham dengan histori pendek tetap
-    masuk menu Daftar Saham; indikator jangka panjang dapat belum tersedia.
-    """
     try:
         data = yf.download(
             ticker, period="1y", interval="1d",
@@ -105,7 +99,6 @@ def fetch_and_compute_single(ticker):
         if not all(col in data.columns for col in required):
             return None
 
-        # Ambil sesi perdagangan terakhir yang seluruh OHLCV-nya valid.
         data = data[required].replace([np.inf, -np.inf], np.nan)
         valid = data.dropna(subset=required)
         if len(valid) < 2:
@@ -125,7 +118,7 @@ def fetch_and_compute_single(ticker):
         c_high = float(row["High"])
         c_low = float(row["Low"])
         c_vol = float(row["Volume"])
-        chg_pct = ((c_val / c_prev) - 1) * 100 if c_prev else np.nan
+        chg_pct = ((c_val / c_prev) - 1) * 100 if c_prev else 0.0
 
         ma50 = close.rolling(50, min_periods=50).mean()
         ma150 = close.rolling(150, min_periods=150).mean()
@@ -183,46 +176,56 @@ def fetch_and_compute_single(ticker):
             return float((c_val / close.iloc[-n-1] - 1) * 100) if len(close) > n else 0.0
 
         pivot_20 = float(pivot_series.iloc[-1]) if pd.notna(pivot_series.iloc[-1]) else c_val
-        # Support/resistance dihitung dari rentang 20 sesi; fallback ke OHLC sesi valid.
-        support_val = low.tail(20).min()
-        resist_val = high.tail(20).max()
+        support_val = float(low.tail(20).min())
+        resist_val = float(high.tail(20).max())
 
         def last_num(series):
-            value = series.iloc[-1]
-            return float(value) if pd.notna(value) else np.nan
+            val = series.iloc[-1]
+            return float(val) if pd.notna(val) else 0.0
 
         ma200_now = last_num(ma200)
-        ma200_before = float(ma200.iloc[-20]) if len(ma200) >= 20 and pd.notna(ma200.iloc[-20]) else np.nan
+        ma200_before = float(ma200.iloc[-20]) if len(ma200) >= 20 and pd.notna(ma200.iloc[-20]) else ma200_now
 
         return {
-            "ticker": ticker.replace(".JK", ""),
-            "nama": ticker.replace(".JK", ""),
-            "open": c_open, "prev": c_prev, "high": c_high, "low": c_low,
-            "close": c_val, "chg": chg_pct, "volume": c_vol,
-            "vol_ma50": last_num(vol_ma50),
-            "support": float(support_val), "pivot_20": pivot_20,
-            "resist": float(resist_val), "harga_beli": pivot_20,
-            "harga_jual": float(pivot_20 + 2 * last_num(atr_series)),
-            "jenis_rekom": "BUY (Breakout)" if c_val >= pivot_20 else "HOLD / WAIT",
-            "alasan_rekom": "Harga di atas pivot" if c_val >= pivot_20 else "Menunggu konfirmasi",
-            "ma50": last_num(ma50), "ma150": last_num(ma150), "ma200": ma200_now,
-            "ma200_slope_positive": bool(pd.notna(ma200_now) and pd.notna(ma200_before) and ma200_now > ma200_before),
-            "high_52w": last_num(high_52w), "low_52w": last_num(low_52w),
-            "rsi14": last_num(rsi_series), "atr14": last_num(atr_series),
-            "macd_hist": last_num(macd_line - macd_signal),
-            "bb_pct_b": float(bb_pct_b) if pd.notna(bb_pct_b) else np.nan,
-            "stoch_k": float(stoch_k) if pd.notna(stoch_k) else np.nan,
-            "obv_flow_20": float(obv_flow_20),
-            "dist_days": dist_days,
-            "vcp_ratio": float(vcp_ratio) if pd.notna(vcp_ratio) else np.nan,
-            "ret_3m": ret_period(63), "ret_6m": ret_period(126),
-            "ret_9m": ret_period(189), "ret_12m": ret_period(252),
-            "avg_val_trx": float((close * volume).rolling(20, min_periods=2).mean().iloc[-1])
+            'ticker': ticker.replace(".JK", ""),
+            'nama': ticker.replace(".JK", ""),
+            'open': c_open,
+            'prev': c_prev,
+            'high': c_high,
+            'low': c_low,
+            'close': c_val,
+            'chg': chg_pct,
+            'volume': c_vol,
+            'vol_ma50': last_num(vol_ma50),
+            'support': support_val,
+            'pivot_20': pivot_20,
+            'resist': resist_val,
+            'harga_beli': pivot_20,
+            'harga_jual': float(pivot_20 + 2 * last_num(atr_series)),
+            'jenis_rekom': "BUY (Breakout)" if c_val >= pivot_20 else "HOLD / WAIT",
+            'alasan_rekom': "Harga di atas pivot" if c_val >= pivot_20 else "Menunggu konfirmasi",
+            'ma50': last_num(ma50),
+            'ma150': last_num(ma150),
+            'ma200': ma200_now,
+            'ma200_slope_positive': bool(ma200_now > ma200_before),
+            'high_52w': last_num(high_52w),
+            'low_52w': last_num(low_52w),
+            'rsi14': last_num(rsi_series),
+            'atr14': last_num(atr_series),
+            'macd_hist': last_num(macd_line - macd_signal),
+            'bb_pct_b': float(bb_pct_b) if pd.notna(bb_pct_b) else 50.0,
+            'stoch_k': float(stoch_k) if pd.notna(stoch_k) else 50.0,
+            'obv_flow_20': float(obv_flow_20),
+            'dist_days': dist_days,
+            'vcp_ratio': float(vcp_ratio) if pd.notna(vcp_ratio) else 1.0,
+            'ret_3m': ret_period(63),
+            'ret_6m': ret_period(126),
+            'ret_9m': ret_period(189),
+            'ret_12m': ret_period(252),
+            'avg_val_trx': float((close * volume).rolling(20, min_periods=2).mean().iloc[-1])
         }
     except Exception:
-        # Ticker tanpa data valid dari Yahoo tidak diberi angka perkiraan.
         return None
-
 
 def run_screener_ultra_fast():
     tickers = load_excel_data()
@@ -260,7 +263,6 @@ def run_screener_ultra_fast():
         0.2 * df_res['ret_9m'] +
         0.2 * df_res['ret_12m']
     )
-    # Skala persentil 1-99 tanpa qcut agar scan tetap berjalan untuk jumlah data berapa pun.
     df_res['rs_rating'] = (df_res['rs_raw'].rank(pct=True, method='average') * 99).clip(1, 99).round().astype(int)
 
     df_res['tt_1'] = (df_res['close'] > df_res['ma150']) & (df_res['close'] > df_res['ma200'])
