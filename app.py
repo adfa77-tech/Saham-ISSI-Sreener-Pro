@@ -167,8 +167,8 @@ def fetch_and_compute_single(ticker):
             'resist': round(c_high * 1.03, 0),
             'harga_beli': round(pivot_20, 0),
             'harga_jual': round(pivot_20 + (2 * atr14), 0),
-            'waktu_beli': "Sesi Breakout / Konfirmasi",
-            'waktu_jual': "Stop Loss (-8% / 2x ATR) / Target",
+            'jenis_rekom': "BUY (Breakout)" if c_val >= pivot_20 else "HOLD / WAIT",
+            'alasan_rekom': "Uptrend & Di Atas Pivot" if c_val >= pivot_20 else "Konsolidasi / Menunggu Konfirmasi",
             'ma50': ma50.iloc[-1],
             'ma150': ma150.iloc[-1],
             'ma200': ma200.iloc[-1],
@@ -493,22 +493,54 @@ if st.session_state.active_menu == "Screener":
 # --- MENU 2: DAFTAR SAHAM ---
 elif st.session_state.active_menu == "Daftar Saham":
     st.markdown("### **Daftar Seluruh Saham ISSI (JII70 / Syariah)**")
-    st.markdown("<p style='color: #8b949e; font-size: 14px;'>Daftar lengkap ticker saham syariah.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #8b949e; font-size: 14px;'>Daftar lengkap seluruh saham syariah beserta data pasar dan rekomendasi teknikal.</p>", unsafe_allow_html=True)
     
-    tickers_list = load_excel_data()
-    if tickers_list:
-        df_list = pd.DataFrame({"No": range(1, len(tickers_list)+1), "Ticker / Kode Saham": [t.replace(".JK", "") for t in tickers_list]})
-        st.dataframe(
-            df_list, 
-            use_container_width=True, 
-            hide_index=True,
-            column_config={
-                "No": st.column_config.NumberColumn("No", width="small"),
-                "Ticker / Kode Saham": st.column_config.TextColumn("Ticker / Kode Saham", width="medium")
-            }
-        )
+    col_btn_all, _ = st.columns([2, 8])
+    with col_btn_all:
+        load_all_btn = st.button("📊 MUAT SEMUA DATA PASAR ISSI")
+
+    if load_all_btn or st.session_state.get('df_all_issi') is not None:
+        if load_all_btn:
+            st.session_state.df_all_issi = run_screener_ultra_fast()
+        
+        df_all = st.session_state.get('df_all_issi')
+        if df_all is not None and not df_all.empty:
+            table_all_data = []
+            for idx, r in df_all.reset_index(drop=True).iterrows():
+                table_all_data.append({
+                    "No": idx + 1,
+                    "Nama Saham": r['nama'],
+                    "Harga": f"{r['close']:,.0f}".replace(",", "."),
+                    "Open": f"{r['open']:,.0f}".replace(",", "."),
+                    "Prev": f"{r['prev']:,.0f}".replace(",", "."),
+                    "High": f"{r['high']:,.0f}".replace(",", "."),
+                    "Low": f"{r['low']:,.0f}".replace(",", "."),
+                    "Close": f"{r['close']:,.0f}".replace(",", "."),
+                    "Chg": f"+{r['chg']:.2f}%" if r['chg'] >= 0 else f"{r['chg']:.2f}%",
+                    "Volume": f"{r['volume']:,.0f}".replace(",", "."),
+                    "Support": f"{r['support']:,.0f}".replace(",", "."),
+                    "Resist": f"{r['resist']:,.0f}".replace(",", "."),
+                    "Pivot": f"{r['pivot_20']:,.0f}".replace(",", "."),
+                    "Harga Buy": f"{r['harga_beli']:,.0f}".replace(",", "."),
+                    "Jual": f"{r['harga_jual']:,.0f}".replace(",", "."),
+                    "Jenis Rekomendasi": r['jenis_rekom'],
+                    "Alasan Rekomendasi": r['alasan_rekom']
+                })
+            
+            df_all_display = pd.DataFrame(table_all_data)
+            st.dataframe(
+                df_all_display,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "No": st.column_config.NumberColumn("No", width="small"),
+                    "Nama Saham": st.column_config.TextColumn("Nama Saham", width="medium")
+                }
+            )
+        else:
+            st.warning("Data pasar sedang dimuat atau kosong.")
     else:
-        st.warning("Daftar saham kosong.")
+        st.info("👈 Klik tombol **'MUAT SEMUA DATA PASAR ISSI'** di atas untuk menampilkan tabel lengkap seluruh emiten.")
 
 # --- MENU 3: STRATEGI ---
 elif st.session_state.active_menu == "Strategi":
@@ -517,20 +549,4 @@ elif st.session_state.active_menu == "Strategi":
     
     st.markdown("---")
     st.markdown("### **1. Trend Template — Mark Minervini**")
-    st.markdown("Syarat mutlak tren naik sehat (MA50, MA150, MA200, kemiringan MA200, jarak ke High/Low 52 minggu).")
-    
-    st.markdown("---")
-    st.markdown("### **2. RS Rating — William O’Neil (IBD)**")
-    st.markdown("Peringkat persentil kekuatan relatif (skala 1–99) dengan bobot terbesar pada momentum 3 bulan terakhir.")
-
-    st.markdown("---")
-    st.markdown("### **3. Pivot Breakout & Volume**")
-    st.markdown("Membeli saat harga menembus titik tertinggi 20 sesi terakhir disertai lonjakan volume transaksi besar (≥ 1,5x rata-rata).")
-
-    st.markdown("---")
-    st.markdown("### **4. VCP (Volatility Contraction Pattern)**")
-    st.markdown("Mengukur penyusutan rentang harga (rasio ≤ 0,55) sebagai tanda pasokan saham sudah kering.")
-
-    st.markdown("---")
-    st.markdown("### **5. Indikator Pendukung Teknis & Skor Momentum**")
-    st.markdown("Dilengkapi MACD, Bollinger Bands, Stochastic, RSI, ATR, serta Skor Komposit Berbobot 0–100.")
+    st.markdown("Syarat mut
