@@ -355,11 +355,12 @@ if st.session_state.active_menu == "Screener":
         df_passed = df[df['lolos_screener'] == True].sort_values(by='skor_momentum', ascending=False).reset_index(drop=True)
 
         try:
-            ihsg_data = yf.download("^JKSE", period="5d", progress=False)
+            # Diperbaiki ke period='1mo' agar data IHSG terkini sinkron dan akurat
+            ihsg_data = yf.download("^JKSE", period="1mo", progress=False)
             if isinstance(ihsg_data.columns, pd.MultiIndex):
                 ihsg_data.columns = ihsg_data.columns.get_level_values(0)
-            ihsg_close = ihsg_data['Close'].iloc[-1]
-            ihsg_prev = ihsg_data['Close'].iloc[-2]
+            ihsg_close = float(ihsg_data['Close'].dropna().iloc[-1])
+            ihsg_prev = float(ihsg_data['Close'].dropna().iloc[-2])
             ihsg_chg = ((ihsg_close - ihsg_prev) / ihsg_prev) * 100
         except Exception:
             ihsg_close, ihsg_chg = 7300.0, 0.5
