@@ -528,8 +528,33 @@ elif st.session_state.active_menu == "Daftar Saham":
                 })
             
             df_all_display = pd.DataFrame(table_all_data)
+            
+            # Styling warna khusus untuk kolom High (Biru), Low (Merah), Prev (Kuning), dan Chg (Hijau/Merah)
+            def color_coding_all(val):
+                # Kita cek berdasarkan nama kolom atau format nilainya
+                pass
+
+            def style_dataframe(df):
+                styles = pd.DataFrame('', index=df.index, columns=df.columns)
+                for col in df.columns:
+                    if col == 'High':
+                        styles[col] = 'color: #38bdf8; font-weight: bold;'      # Biru
+                    elif col == 'Low':
+                        styles[col] = 'color: #f85149; font-weight: bold;'       # Merah
+                    elif col == 'Prev':
+                        styles[col] = 'color: #eab308; font-weight: bold;'       # Kuning
+                    elif col == 'Chg':
+                        # Terapkan hijau jika ada tanda '+' atau merah jika negatif
+                        styles[col] = df[col].apply(lambda x: 'color: #2ea043; font-weight: bold;' if '+' in str(x) else 'color: #f85149; font-weight: bold;')
+                return styles
+
+            try:
+                styled_all_df = df_all_display.style.apply(style_dataframe, axis=None)
+            except Exception:
+                styled_all_df = df_all_display
+
             st.dataframe(
-                df_all_display,
+                styled_all_df,
                 use_container_width=True,
                 hide_index=True,
                 column_config={
@@ -549,4 +574,20 @@ elif st.session_state.active_menu == "Strategi":
     
     st.markdown("---")
     st.markdown("### **1. Trend Template — Mark Minervini**")
-    st.markdown("Syarat mut
+    st.markdown("Syarat mutlak tren naik sehat (MA50, MA150, MA200, kemiringan MA200, jarak ke High/Low 52 minggu).")
+    
+    st.markdown("---")
+    st.markdown("### **2. RS Rating — William O’Neil (IBD)**")
+    st.markdown("Peringkat persentil kekuatan relatif (skala 1–99) dengan bobot terbesar pada momentum 3 bulan terakhir.")
+
+    st.markdown("---")
+    st.markdown("### **3. Pivot Breakout & Volume**")
+    st.markdown("Membeli saat harga menembus titik tertinggi 20 sesi terakhir disertai lonjakan volume transaksi besar (≥ 1,5x rata-rata).")
+
+    st.markdown("---")
+    st.markdown("### **4. VCP (Volatility Contraction Pattern)**")
+    st.markdown("Mengukur penyusutan rentang harga (rasio ≤ 0,55) sebagai tanda pasokan saham sudah kering.")
+
+    st.markdown("---")
+    st.markdown("### **5. Indikator Pendukung Teknis & Skor Momentum**")
+    st.markdown("Dilengkapi MACD, Bollinger Bands, Stochastic, RSI, ATR, serta Skor Komposit Berbobot 0–100.")
