@@ -69,10 +69,8 @@ def generate_recommendation(row):
         score += 2; reasons.append("Strong Uptrend")
     elif row['Close'] > row['EMA20']:
         score += 1; reasons.append("Bullish (>EMA20)")
-    if 30 <= row['RSI'] <= 48:
-        score += 2; reasons.append("RSI Area Rebound")
-    elif 48 < row['RSI'] <= 68:
-        score += 1; reasons.append("Momentum Sehat")
+    if 35 <= row['RSI'] <= 60:
+        score += 2; reasons.append("Momentum Ideal")
     elif row['RSI'] > 75:
         score -= 2; reasons.append("Overbought")
     elif row['RSI'] < 30:
@@ -83,7 +81,7 @@ def generate_recommendation(row):
         score -= 1
     if row['RVOL'] >= 1.3:
         score += 2; reasons.append(f"Vol Spike {row['RVOL']:.1f}x")
-    rec = "🟢 STRONG BUY" if score >= 5 else ("🔵 BUY / AKUMULASI" if score >= 3 else ("🟡 WATCHLIST" if score >= 1 else "🔴 AVOID"))
+    rec = "🟢 STRONG BUY" if score >= 4 else ("🔵 BUY / AKUMULASI" if score >= 2 else ("🟡 WATCHLIST" if score >= 0 else "🔴 AVOID"))
     return rec, score, " | ".join(reasons) if reasons else "Konsolidasi"
 
 def send_telegram_alert(bot_token, chat_id, df_signals, strategy_name):
@@ -149,13 +147,14 @@ def scan_issi_stocks(tickers, strategy_mode, modal_trading, risk_pct, sl_mult, t
             rec, score, reason = generate_recommendation(row)
             row['Rekomendasi'], row['Skor'], row['Alasan Sinyal'] = rec, score, reason
 
+            # Pilihan Strategi dengan Rumus yang Lebih Optimal & Akurat
             if strategy_mode == "Semua Saham ISSI":
                 results.append(row)
-            elif strategy_mode == "Swing Trading (Uptrend + Momentum)" and latest['Close'] > latest['EMA20'] and 40 <= latest['RSI'] <= 68 and latest['MACD'] > latest['Signal']:
+            elif strategy_mode == "Swing Trading (Uptrend + Momentum)" and latest['Close'] > latest['EMA20'] and 35 <= latest['RSI'] <= 65 and latest['MACD'] > latest['Signal']:
                 results.append(row)
-            elif strategy_mode == "Bandarmologi / Volume Spike" and latest['RVOL'] >= 1.3 and pct_chg > 0:
+            elif strategy_mode == "Bandarmologi / Volume Spike" and latest['RVOL'] >= 1.5 and pct_chg > 0:
                 results.append(row)
-            elif strategy_mode == "BSJP (Beli Sore Jual Pagi)" and pct_chg >= 1.5 and latest['RVOL'] >= 1.2:
+            elif strategy_mode == "BSJP (Beli Sore Jual Pagi)" and pct_chg >= 1.0 and latest['RVOL'] >= 1.2 and latest['Close'] > latest['EMA20']:
                 results.append(row)
         except Exception:
             continue
@@ -172,7 +171,7 @@ with col_i:
 
 st.divider()
 
-# PANEL KONTROL UTAMA (DI HALAMAN UTAMA)
+# PANEL KONTROL UTAMA
 if 'issi_list' not in st.session_state:
     st.session_state['issi_list'] = EXCEL_ISSI_TICKERS
 
@@ -262,7 +261,7 @@ elif menu == "📈 Analisis Chart & SL/TP":
                 fig = go.Figure()
                 fig.add_trace(go.Candlestick(x=df_chart.index, open=df_chart['Open'], high=df_chart['High'], low=df_chart['Low'], close=df_chart['Close'], name="Harga"))
                 fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['EMA20'], line=dict(color='#00E5FF', width=1.5), name="EMA 20"))
-                fig.add_trace(go.Scatter(x=df_chart.unstack() if False else df_chart.index, y=df_chart['SMA50'], line=dict(color='#FFAB00', width=1.5), name="SMA 50"))
+                fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['SMA50'], line=dict(color='#FFAB00', width=1.5), name="SMA 50"))
                 fig.add_hline(y=tp_p, line_dash="dash", line_color="#00E676", annotation_text=f"TP: Rp {tp_p:,}")
                 fig.add_hline(y=sl_p, line_dash="dash", line_color="#FF5252", annotation_text=f"SL: Rp {sl_p:,}")
                 fig.update_layout(template="plotly_dark", height=500, xaxis_rangeslider_visible=False, title=f"Visualisasi Trading Plan {selected_stock}")
@@ -276,10 +275,9 @@ elif menu == "📚 Kamus Rumus":
     st.subheader("📚 Penjelasan Rumus & Strategi Kuantitatif")
     st.markdown("""
     * **Semua Saham ISSI:** Menampilkan seluruh daftar 574+ emiten syariah terdaftar tanpa syarat filter strategi.
-    * **Trend Following (EMA 20 & SMA 50):** Menguji arah tren jangka pendek dan menengah.
-    * **Momentum (RSI 14):** Mendeteksi area pantulan sehat (30–48) dan momentum kuat (48–68).
-    * **Bandarmologi (RVOL):** Memantau lonjakan volume transaksi harian terhadap rata-rata 20 hari ($\ge 1.3\text{x}$).
-    * **Manajemen Risiko ATR:** Menentukan jarak Stop Loss dan Take Profit secara dinamis berdasarkan volatilitas harga.
+    * **Swing Trading:** Memindai saham yang berada di atas EMA20 dengan RSI sehat (35–65) dan MACD Golden Cross.
+    * **Bandarmologi / Volume Spike:** Mendeteksi lonjakan volume (RVOL $\ge 1.5\text{x}$) di saat harga menguat.
+    * **BSJP (Beli Sore Jual Pagi):** Menyaring emiten dengan momentum kenaikan intraday stabil menjelang penutupan sesi.
     """)
 
 elif menu == "📂 Daftar Saham ISSI":
